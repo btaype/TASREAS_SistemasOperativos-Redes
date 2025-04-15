@@ -46,7 +46,7 @@ void readSocketThread(int cliSocket,string minombre)
     buffer[n] = '\0';
     //memcpy(salir, buffer, 4); 
     //string nombre=string(buffer,n);
-    printf("hollaaa%s\n",buffer);
+    
     int tamano = atoi(buffer);
     
     
@@ -152,6 +152,114 @@ void readSocketThread(int cliSocket,string minombre)
      
 
     }
+    else if (buffer[0] == 'F') {
+    printf("\n--- INICIO DE RECEPCIÓN DE ARCHIVO ---\n");
+  
+    n = read(cliSocket, buffer, 5);
+    buffer[n] = '\0';
+    printf("1. Recibí longitud de destino: '%s' (%d bytes)\n", buffer, n);
+    int len_dest = atoi(buffer);
+
+    char dummy_dest[101];
+    n = read(cliSocket, dummy_dest, len_dest);
+    dummy_dest[n] = '\0';
+    printf("2. Recibí nombre destino: '%s' (%d bytes)\n", dummy_dest, n);
+
+    n = read(cliSocket, buffer, 5);
+    buffer[n] = '\0';
+    printf("3. Recibí longitud nombre archivo: '%s' (%d bytes)\n", buffer, n);
+    int len_nombre = atoi(buffer);
+
+    char nombre_archivo[101];
+    n = read(cliSocket, nombre_archivo, len_nombre);
+    nombre_archivo[n] = '\0';
+    printf("4. Recibí nombre archivo: '%s' (%d bytes)\n", nombre_archivo, n);
+
+    char buffer_size[19];
+    n = read(cliSocket, buffer_size, 18);
+    buffer_size[n] = '\0';
+    printf("5. Recibí tamaño archivo: '%s' (%d bytes)\n", buffer_size, n);
+    long file_size = atol(buffer_size);
+
+    printf("6. Esperando contenido del archivo (%ld bytes)...\n", file_size);
+    char* contenido = (char*)malloc(file_size);
+    long remaining = file_size;
+    char* ptr = contenido;
+    while (remaining > 0) {
+        n = read(cliSocket, ptr, remaining);
+        if (n <= 0) {
+            printf("Error en recepción: n=%d\n", n);
+            break;
+        }
+        printf("   Recibido chunk de %d bytes (faltan %ld)\n", n, remaining-n);
+        ptr += n;
+        remaining -= n;
+    }
+
+    printf("\n--- PREPARANDO REENVÍO ---\n");
+    // Construir mensaje nuevo (con origen minombre)
+    int len_origen = minombre.size();
+    int total_size = 5 + 1 + 5 + len_origen + 5 + len_nombre + 18 + file_size;
+    printf("Tamaño total del mensaje: %d bytes\n", total_size);
+
+    char* mensaje = (char*)malloc(total_size);
+    int offset = 0;
+
+    // Tamaño total
+    sprintf(buffer, "%05d", total_size);
+    memcpy(mensaje + offset, buffer, 5); offset += 5;
+    printf("- Cabecera tamaño: '%s'\n", buffer);
+
+    // Tipo de mensaje
+    mensaje[offset++] = 'f';
+    printf("- Tipo mensaje: 'f'\n");
+
+    // Longitud del nombre del remitente
+    sprintf(buffer, "%05d", len_origen);
+    memcpy(mensaje + offset, buffer, 5); offset += 5;
+    printf("- Longitud remitente: '%s' (%d)\n", buffer, len_origen);
+
+    // Nombre del remitente (minombre)
+    memcpy(mensaje + offset, minombre.c_str(), len_origen);
+    offset += len_origen;
+    printf("- Remitente: '%.*s'\n", len_origen, minombre.c_str());
+
+    // Longitud del nombre del archivo
+    sprintf(buffer, "%05d", len_nombre);
+    memcpy(mensaje + offset, buffer, 5); offset += 5;
+    printf("- Longitud nombre archivo: '%s'\n", buffer);
+
+    // Nombre del archivo
+    memcpy(mensaje + offset, nombre_archivo, len_nombre);
+    offset += len_nombre;
+    printf("- Nombre archivo: '%s'\n", nombre_archivo);
+
+    // Tamaño del archivo
+    sprintf(buffer, "%018ld", file_size);
+    memcpy(mensaje + offset, buffer, 18);
+    offset += 18;
+    printf("- Tamaño archivo: '%s'\n", buffer);
+
+    // Contenido del archivo (no imprimimos el contenido binario)
+    memcpy(mensaje + offset, contenido, file_size);
+    offset += file_size;
+    printf("- Contenido archivo: [%ld bytes de datos binarios]\n", file_size);
+
+    // Reenviar al cliente destino si existe
+    if (nickname.count(dummy_dest) > 0) {
+        printf("\n--- REENVIANDO A %s ---\n", dummy_dest);
+        write(nickname[dummy_dest], mensaje, total_size);
+        printf("Archivo reenviado de %s a %s\n", minombre.c_str(), dummy_dest);
+    } else {
+        printf("\nERROR: Usuario destino no encontrado: %s\n", dummy_dest);
+    }
+
+    // Limpiar
+    free(contenido);
+    free(mensaje);
+    printf("--- FIN DE PROCESAMIENTO DE ARCHIVO ---\n\n");
+}
+
 
   } 
   

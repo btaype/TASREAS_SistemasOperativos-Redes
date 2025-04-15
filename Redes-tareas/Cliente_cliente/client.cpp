@@ -22,10 +22,12 @@ void* readSocketThread(void* arg) {
 
     while (1) {
         n = read(cliSocket , buffer, 5);
+        
         if (n <= 0) {
             printf("\n[Cliente] Conexión cerrada o error. Cerrando hilo...\n");
             break;
         }
+       // printf("entardnobucle");
         buffer[n] = '\0';
         
         int tamano = atoi(buffer);
@@ -83,8 +85,71 @@ void* readSocketThread(void* arg) {
             if (n <= 0) break;
             nombre_p[n] = '\0';
 
-            printf("\nMensaje global de <%s>: %s\n", nombre_p, buffer);
+         
         }
+        else if (buffer[0] == 'f') {
+            
+            
+            n = read(cliSocket, buffer, 5);
+            buffer[n] = '\0';
+            int len_dest = atoi(buffer);
+
+            
+            char dummy_dest[101];
+            n = read(cliSocket, dummy_dest, len_dest);
+            dummy_dest[n] = '\0';
+
+        
+            n = read(cliSocket, buffer, 5);
+            buffer[n] = '\0';
+            int len_nombre = atoi(buffer);
+
+        
+            char nombre_archivo[101];
+            n = read(cliSocket, nombre_archivo, len_nombre);
+            nombre_archivo[n] = '\0';
+
+            
+            char buffer_size[19];
+            n = read(cliSocket, buffer_size, 18);
+            buffer_size[n] = '\0';
+            long file_size = atol(buffer_size);
+
+            
+            char* contenido = (char*)malloc(file_size);
+            n = read(cliSocket, contenido, file_size);
+            char nuevo_nombre[256];
+
+
+            char* punto = strrchr(nombre_archivo, '.');
+
+            if (punto) {
+               
+                size_t len_base = punto - nombre_archivo;
+                strncpy(nuevo_nombre, nombre_archivo, len_base);
+                nuevo_nombre[len_base] = '\0';  
+
+                strcat(nuevo_nombre, "copia");
+                strcat(nuevo_nombre, punto);   
+            } else {
+                
+                sprintf(nuevo_nombre, "%scopia", nombre_archivo);
+}
+           
+            FILE* f = fopen(nuevo_nombre, "wb");
+            if (!f) {
+                perror("No se pudo crear el archivo");
+                free(contenido);
+                return NULL;
+            }
+            fwrite(contenido, 1, file_size, f);
+            fclose(f);
+            free(contenido);
+
+            printf("\nArchivo recibido de <%s> y guardado como '%s' (%ld bytes).\n",
+                dummy_dest, nombre_archivo, file_size);
+        }
+
     }
 
     shutdown(cliSocket, SHUT_RDWR);
@@ -144,6 +209,95 @@ void mssjgeneral(int soketfd){
     sprintf(buffer3,"%05dB%05d%s",tamano1+5,tamano1-1,buffer);
     write(soketfd,buffer3,tamano1+5+5);
  }
+
+void enviarArchivo(int socketfd) {
+    char buffer[101];    // Para destino
+    char buffer2[201];   // Para nombre del archivo
+
+    // Pedir DESTINO
+    printf("Destino : ");
+    fflush(stdout);
+    fgets(buffer, sizeof(buffer), stdin);
+    buffer[strcspn(buffer, "\n")] = '\0'; // Eliminar \n
+
+    // Pedir NOMBRE DEL ARCHIVO
+    printf("Archivo a enviar : ");
+    fflush(stdout);
+    fgets(buffer2, sizeof(buffer2), stdin);
+    buffer2[strcspn(buffer2, "\n")] = '\0'; // Eliminar \n
+
+    const char* destino = buffer;
+    const char* nombreArchivo = buffer2;
+
+    FILE* file = fopen(nombreArchivo, "rb");
+    if (!file) {
+        perror("No se pudo abrir el archivo");
+        return;
+    }
+
+    // Obtener tamaño del archivo
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    rewind(file);
+
+    // Leer archivo en memoria
+    char* file_buffer = (char*)malloc(file_size + 1);
+    if (!file_buffer) {
+        perror("No se pudo reservar memoria");
+        fclose(file);
+        return;
+    }
+    fread(file_buffer, 1, file_size, file);
+    fclose(file);
+    file_buffer[file_size] = '\0'; // Por seguridad (aunque no sea texto)
+
+    // Calcular longitudes
+    int len_destino = strlen(destino);
+    int len_nombre = strlen(nombreArchivo);
+
+    // Crear header
+    char header[1024] = "";
+    char temp[64];
+
+    sprintf(temp, "%05d", len_destino);
+    strcat(header, temp);
+    strcat(header, destino);
+
+    sprintf(temp, "%05d", len_nombre);
+    strcat(header, temp);
+    strcat(header, nombreArchivo);
+
+    sprintf(temp, "%018ld", file_size);
+    strcat(header, temp);
+
+    // Ahora calcular total size del mensaje
+    int total_size = 5 + 1 + strlen(header) + file_size;
+
+    // Crear mensaje final
+    char* mensaje = (char*)malloc(total_size + 1);
+    if (!mensaje) {
+        perror("No se pudo reservar memoria para mensaje");
+        free(file_buffer);
+        return;
+    }
+
+    // Armar mensaje completo
+    sprintf(mensaje, "%05d", total_size);
+    mensaje[5] = 'F'; // Tipo de mensaje
+    mensaje[6] = '\0';
+
+    strcat(mensaje, header);
+    memcpy(mensaje + strlen(mensaje), file_buffer, file_size); // Solo aquí usamos memcpy por binarios
+
+    // Enviar mensaje
+    write(socketfd, mensaje, total_size);
+    printf("Archivo enviado correctamente (%s, %ld bytes).\n", nombreArchivo, file_size);
+
+    // Liberar memoria
+    free(file_buffer);
+    free(mensaje);
+}
+
 int main(void) {
     struct sockaddr_in stSockAddr;
     int Res;
@@ -203,9 +357,13 @@ int main(void) {
         std::cout << "1. Ver lista de usuarios\n";
         std::cout << "2. Enviar mensaje\n";
 
+        
         std::cout << "3. Enviar mensaje a todos\n";
-        std::cout << "4. Salir\n";
+        std::cout << "4. Enviar archivo a usuario\n";
+        std::cout << "5. Salir\n";
+        
         std::cout << "Seleccione una opción: ";
+        
         std::cin >> opcion;
         std::cin.ignore();  
 
@@ -219,10 +377,14 @@ int main(void) {
             
             mssjgeneral(SocketFD);
         }
-        else if (opcion == 4) {
+        else if (opcion == 5) {
             quit(SocketFD);
             break;
         }
+        else if (opcion == 4) {
+        enviarArchivo(SocketFD);
+        }
+
         else {
             std::cout << "Opción inválida. Intenta de nuevo.\n";
         }
