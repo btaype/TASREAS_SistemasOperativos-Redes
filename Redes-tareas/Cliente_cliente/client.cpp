@@ -18,44 +18,75 @@ const char* msgg = "msg";
 void* readSocketThread(void* arg) {
     int cliSocket = *(int*)arg;
     char buffer[300];
-    do {
-       int n = read(cliSocket , buffer, 5);
+    int n;
+
+    while (1) {
+        n = read(cliSocket , buffer, 5);
+        if (n <= 0) {
+            printf("\n[Cliente] Conexión cerrada o error. Cerrando hilo...\n");
+            break;
+        }
         buffer[n] = '\0';
         
-        //string nombre=string(buffer,n);
-        //printf("%s\n",buffer);
         int tamano = atoi(buffer);
         
-        
         n = read(cliSocket, buffer, 1);
+        if (n <= 0) break;
 
-        if (buffer[0]=='l'){
-            
+        if (buffer[0] == 'l') {
             buffer[0] = '\0';   
-
-            n=read(cliSocket,buffer,tamano-1);
-            buffer[n]='\0';
-            printf("\nlista de usuarios:\n %s",buffer);}
-
-        else if(buffer[0]='m'){
-            char buffer2[100];
-            n=read(cliSocket,buffer,5);
-            buffer[n]='\0';
-            tamano=atoi(buffer);
-            n=read(cliSocket,buffer,tamano);
-            buffer[n]='\0';
-            n=read(cliSocket,buffer2,5);
-            buffer2[n]='\0';
-            tamano=atoi(buffer2);
-            
-            n=read(cliSocket,buffer2,tamano);
-            buffer2[n]='\0';
-            printf("\nMensaje de < %s> : %s\n",buffer2,buffer);
-
-
+            n = read(cliSocket, buffer, tamano - 1);
+            if (n <= 0) break;
+            buffer[n] = '\0';
+            printf("\nLista de usuarios:\n%s\n", buffer);
         }
-         
-    } while (strncmp(buffer, "exit", 4) != 0);
+        else if (buffer[0] == 'm') {
+            char buffer2[100];
+
+            n = read(cliSocket, buffer, 5);
+            if (n <= 0) break;
+            buffer[n] = '\0';
+            tamano = atoi(buffer);
+
+            n = read(cliSocket, buffer, tamano);
+            if (n <= 0) break;
+            buffer[n] = '\0';
+
+            n = read(cliSocket, buffer2, 5);
+            if (n <= 0) break;
+            buffer2[n] = '\0';
+            tamano = atoi(buffer2);
+
+            n = read(cliSocket, buffer2, tamano);
+            if (n <= 0) break;
+            buffer2[n] = '\0';
+
+            printf("\nMensaje de <%s>: %s\n", buffer2, buffer);
+        }
+        else if (buffer[0] == 'b') {
+            n = read(cliSocket, buffer, 5);
+            if (n <= 0) break;
+            buffer[n] = '\0';
+            tamano = atoi(buffer);
+
+            n = read(cliSocket, buffer, tamano);
+            if (n <= 0) break;
+            buffer[n] = '\0';
+
+            char nombre_p[101];
+            n = read(cliSocket, nombre_p, 5);
+            if (n <= 0) break;
+            nombre_p[n] = '\0';
+            tamano = atoi(nombre_p);
+
+            n = read(cliSocket, nombre_p, tamano);
+            if (n <= 0) break;
+            nombre_p[n] = '\0';
+
+            printf("\nMensaje global de <%s>: %s\n", nombre_p, buffer);
+        }
+    }
+
     shutdown(cliSocket, SHUT_RDWR);
     close(cliSocket);
     return NULL;
@@ -91,6 +122,28 @@ void chatear(int soketfd){;
 
     return;
 }
+
+ void quit(int soketfd){
+    char buffer_temp[8]="00001E\0";
+   write(soketfd,buffer_temp,6);  
+    std::cout << "Saliendo del chat...\n";
+
+
+ }
+    
+void mssjgeneral(int soketfd){
+    char buffer[101];
+    
+    char buffer3[301];
+
+    printf("mensaje : ");
+    fflush(stdout);
+    fgets(buffer, 100, stdin);
+    int tamano1 = strlen(buffer);
+    buffer[tamano1 - 1] = '\0'; 
+    sprintf(buffer3,"%05dB%05d%s",tamano1+5,tamano1-1,buffer);
+    write(soketfd,buffer3,tamano1+5+5);
+ }
 int main(void) {
     struct sockaddr_in stSockAddr;
     int Res;
@@ -149,10 +202,12 @@ int main(void) {
         std::cout << "\n--- MENÚ ---\n";
         std::cout << "1. Ver lista de usuarios\n";
         std::cout << "2. Enviar mensaje\n";
-        std::cout << "3. Salir\n";
+
+        std::cout << "3. Enviar mensaje a todos\n";
+        std::cout << "4. Salir\n";
         std::cout << "Seleccione una opción: ";
         std::cin >> opcion;
-        std::cin.ignore();  // para limpiar el buffer del salto de línea
+        std::cin.ignore();  
 
         if (opcion == 1) {
             list_users(SocketFD);
@@ -161,10 +216,11 @@ int main(void) {
            chatear(SocketFD);
         }
         else if (opcion == 3) {
-            char salir1[8]="00001E\0";
-            write(SocketFD, salir1, 6);  
-            std::cout << "Saliendo del chat...\n";
             
+            mssjgeneral(SocketFD);
+        }
+        else if (opcion == 4) {
+            quit(SocketFD);
             break;
         }
         else {

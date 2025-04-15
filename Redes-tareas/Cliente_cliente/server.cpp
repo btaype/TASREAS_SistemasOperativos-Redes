@@ -39,7 +39,8 @@ void readSocketThread(int cliSocket,string minombre)
 {
   char buffer[201];
   char salir[4];
-  while(1){
+  bool deten=1;
+  while(deten){
 
     int n = read(cliSocket , buffer, 5);
     buffer[n] = '\0';
@@ -122,45 +123,35 @@ void readSocketThread(int cliSocket,string minombre)
 
 
     }
-    else if(buffer[0]=='E'){
-      sprintf("\nSE RETIRO : %s",minombre.c_str());
+    else if(buffer[0]=='B'){
+      n=read(cliSocket,buffer,5);
+      buffer[n]='\0';
+      tamano = atoi(buffer);
+      n=read(cliSocket,buffer,tamano);
+      char  envio[201];
+      sprintf(envio,"%05db%05d%s%05d%s",(int)minombre.size()+tamano+11,tamano,buffer,(int)minombre.size(),minombre.c_str());
+      for (const auto& par : nickname) {
+        if (minombre!=par.first){
+          write(par.second,envio,(int)minombre.size()+tamano+11+5);
+         }
       
+      }
+      
+
+
+    }
+    else if(buffer[0]=='E'){
+      printf("\nSE RETIRO : %s",minombre.c_str());
+      fflush(stdout);
+      deten=0;
       //listSockets.remove(cliSocket);
       nickname.erase(minombre);
+      shutdown(cliSocket, SHUT_RDWR);
+      close(cliSocket);
       break;
      
 
     }
-    /*  
-    int n = read(cliSocket, buffer, 100);
-    buffer[n] = '\0';
-    
-    printf("enviando para %s \n",buffer);
-    
-    //buffer[n] = '\0';
-
-    if((nickname.count(buffer) > 0)){
-      char buffer2[101];
-      char msgsend[250];
-      n = read(cliSocket, buffer2, 100);
-
-      
-      strcpy(msgsend, minombre.c_str());
-      msgsend[minombre.size()]=' ';
-      strcat(msgsend, "dice : ");   
-      strcat(msgsend, buffer2);
-      
-      write(nickname[buffer], msgsend ,strlen(msgsend));
-    }*/
-    
-    
-
-
-    //printf("\n%s\n", buffer);
-    //printf("Enter a msg:");
-    //for (list<int>::iterator it=listSockets.begin(); it != listSockets.end(); ++it)
-    //   write(*it, buffer, n);
-
 
   } 
   
