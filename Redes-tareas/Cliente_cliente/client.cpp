@@ -10,11 +10,12 @@
 #include <unistd.h>
 #include <pthread.h>
 #include<iostream>
+#include <openssl/sha.h> 
 using namespace std;
 bool controlmsg = 1;
 const char* para = "para";
 const char* msgg = "msg";
-
+char michi;
 void* readSocketThread(void* arg) {
     int cliSocket = *(int*)arg;
     char buffer[300];
@@ -25,6 +26,7 @@ void* readSocketThread(void* arg) {
         
         if (n <= 0) {
             printf("\n[Cliente] Conexión cerrada o error. Cerrando hilo...\n");
+            return NULL;
             break;
         }
        // printf("entardnobucle");
@@ -33,7 +35,7 @@ void* readSocketThread(void* arg) {
         int tamano = atoi(buffer);
         
         n = read(cliSocket, buffer, 1);
-        if (n <= 0) break;
+        if (n <= 0) {return NULL;}
 
         if (buffer[0] == 'l') {
             buffer[0] = '\0';   
@@ -85,6 +87,7 @@ void* readSocketThread(void* arg) {
             if (n <= 0) break;
             nombre_p[n] = '\0';
 
+            printf("\nMensaje de <%s>: %s\n", nombre_p, buffer);
          
         }
         else if (buffer[0] == 'f') {
@@ -100,7 +103,7 @@ void* readSocketThread(void* arg) {
             dummy_dest[n] = '\0';
 
         
-            n = read(cliSocket, buffer, 5);
+            n = read(cliSocket, buffer, 100);
             buffer[n] = '\0';
             int len_nombre = atoi(buffer);
 
@@ -117,7 +120,26 @@ void* readSocketThread(void* arg) {
 
             
             char* contenido = (char*)malloc(file_size);
-            n = read(cliSocket, contenido, file_size);
+            long remaining = file_size;
+            long offset1 = 0;
+
+            while (remaining > 0) {
+                int chunk_size = remaining > 300 ? 300 : remaining;
+                char temp_buffer[300]; // buffer temporal
+
+                int n = read(cliSocket, temp_buffer, chunk_size);
+                printf("El número es: %d\n", n);  // n es int, no hace falta %ld
+
+                if (n <= 0) {
+                    printf("Error en recepción: n=%d\n", n);
+                    break;
+                }
+
+                memcpy(contenido + offset1, temp_buffer, n);  // copiamos al buffer final
+                offset1+= n;
+                remaining -= n;
+                }
+
             char nuevo_nombre[256];
 
 
@@ -148,6 +170,49 @@ void* readSocketThread(void* arg) {
 
             printf("\nArchivo recibido de <%s> y guardado como '%s' (%ld bytes).\n",
                 dummy_dest, nombre_archivo, file_size);
+        }
+        else if(buffer[0]=='T'){
+            n = read(cliSocket, buffer, 1);
+            michi=buffer[0];
+            printf("\nTu Turno %c \n",michi);
+        }
+        else if(buffer[0]=='E'){
+            char recibe[101];
+            n=read(cliSocket,recibe,1);
+            recibe[n]='\0';
+            int nerror=atoi(recibe);
+            n=read(cliSocket,recibe,5);
+            recibe[n]='\0';
+            int tamano = atoi(recibe);
+            n=read(cliSocket,recibe,tamano);
+            recibe[n]='\0';
+
+            printf("\nError <%01d> %s\n",nerror,recibe);
+        }
+        else if(buffer[0]=='X'){
+            char recibemichi[15];
+            n=read(cliSocket,recibemichi,9);
+            recibemichi[n]='\0';
+            printf("\n");
+            for (int i = 0; i < 9; i++) {
+                printf(" %c ", recibemichi[i]);
+                if (i % 3 != 2) printf("|");
+                if (i % 3 == 2 && i != 8) printf("\n---+---+---\n");
+            }
+            printf("\n");
+
+        }
+        else if(buffer[0]=='O'){
+            printf("\nsi llegue 4\n");
+            char  l[4];
+            n=read(cliSocket,l,1);
+
+            l[1] = '\0';  
+            if (n <= 0) {
+                perror("Error al leer el resultado o conexión cerrada");
+            } else {
+            printf("\nRESULTADO DEL JUEGO : %c",l[0]);
+            fflush(stdout);}
         }
 
     }
@@ -189,7 +254,7 @@ void chatear(int soketfd){;
 }
 
  void quit(int soketfd){
-    char buffer_temp[8]="00001E\0";
+    char buffer_temp[8]="00001Q\0";
    write(soketfd,buffer_temp,6);  
     std::cout << "Saliendo del chat...\n";
 
@@ -207,9 +272,19 @@ void mssjgeneral(int soketfd){
     int tamano1 = strlen(buffer);
     buffer[tamano1 - 1] = '\0'; 
     sprintf(buffer3,"%05dB%05d%s",tamano1+5,tamano1-1,buffer);
+    
     write(soketfd,buffer3,tamano1+5+5);
- }
+    printf("\n%s\n",buffer3);
+    printf("\n%d\n",tamano1+5+5);
 
+ }
+void jugarmichi(int soketfd){
+    char buffer_temp[8]="00001J\0";
+   write(soketfd,buffer_temp,6);  
+    std::cout << "SOLICITANDO\n";
+
+
+ }
 void enviarArchivo(int socketfd) {
     char buffer[101];    // Para destino
     char buffer2[201];   // Para nombre del archivo
@@ -218,18 +293,19 @@ void enviarArchivo(int socketfd) {
     printf("Destino : ");
     fflush(stdout);
     fgets(buffer, sizeof(buffer), stdin);
-    buffer[strcspn(buffer, "\n")] = '\0'; // Eliminar \n
+    int tamanodestino = strlen(buffer);
+    if (buffer[tamanodestino - 1] == '\n') buffer[tamanodestino - 1] = '\0';
+    tamanodestino = strlen(buffer); // Actualizar tamaño real
 
     // Pedir NOMBRE DEL ARCHIVO
     printf("Archivo a enviar : ");
     fflush(stdout);
     fgets(buffer2, sizeof(buffer2), stdin);
-    buffer2[strcspn(buffer2, "\n")] = '\0'; // Eliminar \n
+    int tamanonamefile = strlen(buffer2);
+    if (buffer2[tamanonamefile - 1] == '\n') buffer2[tamanonamefile - 1] = '\0';
+    tamanonamefile = strlen(buffer2); // Actualizar tamaño real
 
-    const char* destino = buffer;
-    const char* nombreArchivo = buffer2;
-
-    FILE* file = fopen(nombreArchivo, "rb");
+    FILE* file = fopen(buffer2, "rb");
     if (!file) {
         perror("No se pudo abrir el archivo");
         return;
@@ -241,63 +317,76 @@ void enviarArchivo(int socketfd) {
     rewind(file);
 
     // Leer archivo en memoria
-    char* file_buffer = (char*)malloc(file_size + 1);
-    if (!file_buffer) {
-        perror("No se pudo reservar memoria");
+    char* file_data = (char*)malloc(file_size);
+    if (!file_data) {
+        perror("No se pudo reservar memoria para el archivo");
         fclose(file);
         return;
     }
-    fread(file_buffer, 1, file_size, file);
+    fread(file_data, 1, file_size, file);
     fclose(file);
-    file_buffer[file_size] = '\0'; // Por seguridad (aunque no sea texto)
 
-    // Calcular longitudes
-    int len_destino = strlen(destino);
-    int len_nombre = strlen(nombreArchivo);
+    // Crear cabecera en string (sin binarios aún)
+    char header[1024]; // tamaño suficiente para la cabecera
+    int header_len = snprintf(header, sizeof(header), "%05ldF%05d%s%0100d%s%018ld",
+                              0L, // Placeholder para tamaño total (lo pondremos luego)
+                              tamanodestino, buffer,
+                              tamanonamefile, buffer2,
+                              file_size);
 
-    // Crear header
-    char header[1024] = "";
-    char temp[64];
-
-    sprintf(temp, "%05d", len_destino);
-    strcat(header, temp);
-    strcat(header, destino);
-
-    sprintf(temp, "%05d", len_nombre);
-    strcat(header, temp);
-    strcat(header, nombreArchivo);
-
-    sprintf(temp, "%018ld", file_size);
-    strcat(header, temp);
-
-    // Ahora calcular total size del mensaje
-    int total_size = 5 + 1 + strlen(header) + file_size;
-
-    // Crear mensaje final
-    char* mensaje = (char*)malloc(total_size + 1);
-    if (!mensaje) {
-        perror("No se pudo reservar memoria para mensaje");
-        free(file_buffer);
+    if (header_len < 0 || header_len >= sizeof(header)) {
+        fprintf(stderr, "Error al construir la cabecera\n");
+        free(file_data);
+        return;
+    }
+    
+    // Calcular tamaño total real
+    long total_size = header_len + file_size;
+    //snprintf(header, 6, "%05ld", total_size); // Escribir tamaño real en los primeros 5 bytes
+    printf("\n%s\n",header);
+    printf("\n%d\n",header_len);
+    // Construir el buffer final
+    char* final_buffer = (char*)malloc(total_size);
+    if (!final_buffer) {
+        perror("No se pudo reservar memoria para el mensaje final");
+        free(file_data);
         return;
     }
 
-    // Armar mensaje completo
-    sprintf(mensaje, "%05d", total_size);
-    mensaje[5] = 'F'; // Tipo de mensaje
-    mensaje[6] = '\0';
-
-    strcat(mensaje, header);
-    memcpy(mensaje + strlen(mensaje), file_buffer, file_size); // Solo aquí usamos memcpy por binarios
-
-    // Enviar mensaje
-    write(socketfd, mensaje, total_size);
-    printf("Archivo enviado correctamente (%s, %ld bytes).\n", nombreArchivo, file_size);
+    memcpy(final_buffer, header, header_len);                // Copiar cabecera
+    memcpy(final_buffer + header_len, file_data, file_size); // Copiar contenido binario
+    for (int i = 0; i < header_len; i++) {
+    printf("%c", final_buffer[i]);
+}
+printf("\n");
+    // Enviar mensaje completo
+    write(socketfd, final_buffer, total_size);
 
     // Liberar memoria
-    free(file_buffer);
-    free(mensaje);
+    free(file_data);
+    free(final_buffer);
 }
 
+void enviarposs(int socketfd){
+    int poss=0;
+    printf("\nposiion: ");
+    cin>>poss;
+    std::cin.ignore(); 
+    if ( poss<0 || poss>9){
+        printf("\nposicion no valida\n");
+        return;
+    }
+    char enviar[20];
+    sprintf(enviar,"%05dP%01d%c",3,poss,michi);
+    write(socketfd,enviar,8);
+
+}
+
+void viewmichi(int socketfd){
+    char buffer_temp[8]="00001V\0";
+   write(socketfd,buffer_temp,6);  
+    //std::cout << "Saliendo del chat...\n";
+}
 int main(void) {
     struct sockaddr_in stSockAddr;
     int Res;
@@ -313,7 +402,7 @@ int main(void) {
     memset(&stSockAddr, 0, sizeof(struct sockaddr_in));
 
     stSockAddr.sin_family = AF_INET;
-    stSockAddr.sin_port = htons(4000);
+    stSockAddr.sin_port = htons(1100);
     Res = inet_pton(AF_INET, "127.0.0.1", &stSockAddr.sin_addr);
 
     if (0 > Res) {
@@ -360,10 +449,12 @@ int main(void) {
         
         std::cout << "3. Enviar mensaje a todos\n";
         std::cout << "4. Enviar archivo a usuario\n";
-        std::cout << "5. Salir\n";
+        std::cout<<  "5. Join #\n";
+        std::cout<<  "6. enviar posicion #\n";
+        std::cout<<  "7. view #\n";
+        std::cout << "8. Salir\n";
         
         std::cout << "Seleccione una opción: ";
-        
         std::cin >> opcion;
         std::cin.ignore();  
 
@@ -377,18 +468,28 @@ int main(void) {
             
             mssjgeneral(SocketFD);
         }
-        else if (opcion == 5) {
+        else if (opcion == 8) {
             quit(SocketFD);
             break;
         }
+        else if (opcion == 7) {
+            viewmichi(SocketFD);
+        }
         else if (opcion == 4) {
-        enviarArchivo(SocketFD);
+            enviarArchivo(SocketFD);
+        }
+        else if (opcion == 5) {
+           jugarmichi(SocketFD);
+        }
+        else if (opcion == 6) {
+           enviarposs(SocketFD);
         }
 
         else {
             std::cout << "Opción inválida. Intenta de nuevo.\n";
         }
     }
+
     /*do {
         controlmsg = 1;
         printf("%s : ", para);
@@ -409,6 +510,7 @@ int main(void) {
 
     } while (strncmp(buffer, "exit", 4) != 0);
     */
+
     shutdown(SocketFD, SHUT_RDWR);
     close(SocketFD);
     return 0;
