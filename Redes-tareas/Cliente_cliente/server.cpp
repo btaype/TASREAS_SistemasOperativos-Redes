@@ -81,25 +81,14 @@ void writeSocketThread(int cliSocket)
   shutdown(cliSocket, SHUT_RDWR);
   close(cliSocket);
 }
-void readSocketThread(int cliSocket,string minombre)
+void procesarMensaje(int cliSocket, string minombre, char tipo)
 {
   char buffer[201];
   char salir[4];
   bool deten=1;
-  while(deten){
-
-    int n = read(cliSocket , buffer, 5);
-    buffer[n] = '\0';
-    //memcpy(salir, buffer, 4); 
-    //string nombre=string(buffer,n);
-    
-    int tamano = atoi(buffer);
-    
-    
-    n = read(cliSocket, buffer, 1);
-    printf("%c\n",buffer[0]);
-
-    if (buffer[0]=='L'){
+    int n;
+    int tamano ;
+    if (tipo == 'L'){
         
         buffer[0] = '\0';   
 
@@ -113,7 +102,7 @@ void readSocketThread(int cliSocket,string minombre)
       
 
     }
-    else if(buffer[0]=='M'){
+    else if(tipo == 'M'){
      // printf("si entre\n");
 
 
@@ -169,7 +158,7 @@ void readSocketThread(int cliSocket,string minombre)
 
 
     }
-    else if(buffer[0]=='B'){
+    else if(tipo =='B'){
       n=read(cliSocket,buffer,5);
       buffer[n]='\0';
       tamano = atoi(buffer);
@@ -183,7 +172,7 @@ void readSocketThread(int cliSocket,string minombre)
           
           write(par.second,envio,(int)minombre.size()+tamano+11+5);
            printf("\n%s\n",envio);
-            printf("\n%d\n",(int)minombre.size()+tamano+11+5);
+            
          }
       
       }
@@ -191,20 +180,8 @@ void readSocketThread(int cliSocket,string minombre)
 
 
     }
-    else if(buffer[0]=='Q'){
-      printf("\nSE RETIRO : %s",minombre.c_str());
-      fflush(stdout);
-      deten=0;
-      //listSockets.remove(cliSocket);
-      nickname.erase(minombre);
-      shutdown(cliSocket, SHUT_RDWR);
-      close(cliSocket);
-      return;
-      break;
-     
-
-    }
-    else if(buffer[0]=='J'){
+   
+    else if(tipo =='J'){
       if (jugadores.size()==0){
         jugadores[minombre]='O';
         char buffer2[101];
@@ -243,10 +220,10 @@ void readSocketThread(int cliSocket,string minombre)
       }
 
     }
-    else if(buffer[0]=='V'){
+    else if(tipo =='V'){
       view.push_back(minombre);
     }
-    else if (buffer[0]=='P'){
+    else if (tipo =='P'){
       ///printf("\nCorrecto\n");
 
       char buffer[2]; 
@@ -333,7 +310,7 @@ void readSocketThread(int cliSocket,string minombre)
 
 
     }
-    else if (buffer[0]=='F'){
+    else if (tipo =='F'){
     printf("\n--- INICIO DE RECEPCIÓN DE ARCHIVO ---\n");
 
     // 1. Longitud del nombre destino
@@ -369,7 +346,7 @@ void readSocketThread(int cliSocket,string minombre)
 
     // 6. Contenido del archivo
     printf("6. Esperando contenido del archivo (%ld bytes)...\n", file_size);
-    std::this_thread::sleep_for(std::chrono::seconds(15));
+    
     char* contenido = (char*)malloc(file_size);
     long remaining = file_size;
     long offset1 = 0;
@@ -392,7 +369,7 @@ void readSocketThread(int cliSocket,string minombre)
         }
     
     printf("   Contenido recibido correctamente (%ld bytes)\n", file_size);
-    std::this_thread::sleep_for(std::chrono::seconds(15));
+    
 
     printf("\n--- PREPARANDO REENVÍO ---\n");
     // Construir mensaje nuevo (con origen minombre)
@@ -461,87 +438,118 @@ void readSocketThread(int cliSocket,string minombre)
 
   } 
   
-}
 
-int main(void)
-{
-  struct sockaddr_in stSockAddr;
-  int SocketFD = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-  char buffer[256];
-  int n;
 
-  if (-1 == SocketFD)
-  {
-    perror("can not create socket");
-    exit(EXIT_FAILURE);
-  }
+int main() {
+    int SocketFD = socket(AF_INET, SOCK_STREAM, 0);
+    if (SocketFD < 0) {
+        perror("socket()");
+        exit(EXIT_FAILURE);
+    }
 
-  memset(&stSockAddr, 0, sizeof(struct sockaddr_in));
+    sockaddr_in server;
+    server.sin_family = AF_INET;
+    server.sin_port = htons(7200);
+    server.sin_addr.s_addr = INADDR_ANY;
 
-  stSockAddr.sin_family = AF_INET;
-  stSockAddr.sin_port = htons(1100);
-  stSockAddr.sin_addr.s_addr = INADDR_ANY;
+    if (bind(SocketFD, (struct sockaddr*)&server, sizeof(server)) < 0) {
+        perror("bind()");
+        exit(EXIT_FAILURE);
+    }
 
-  if (-1 == bind(SocketFD, (const struct sockaddr *)&stSockAddr, sizeof(struct sockaddr_in)))
-  {
-    perror("error bind failed");
+    if (listen(SocketFD, 10) < 0) {
+        perror("listen()");
+        exit(EXIT_FAILURE);
+    }
+
+    fd_set master_set, read_fds;
+    FD_ZERO(&master_set);
+    FD_SET(SocketFD, &master_set);
+    int max_sd = SocketFD;
+    map<int, string> nombres_por_socket;
+
+    while (true) {
+        read_fds = master_set;
+        if (select(max_sd + 1, &read_fds, NULL, NULL, NULL) < 0) {
+            perror("select()");
+            break;
+        }
+
+        for (int i = 0; i <= max_sd; i++) {
+            if (FD_ISSET(i, &read_fds)) {
+                if (i == SocketFD) {
+                    int nuevoSocket = accept(SocketFD, NULL, NULL);
+                    if (nuevoSocket < 0) {
+                        perror("accept()");
+                        continue;
+                    }
+
+                    char buffer[256];
+                    int n = read(nuevoSocket, buffer, 5);
+                    if (n <= 0) continue;
+                    buffer[n] = '\0';
+                    int tamano = atoi(buffer);
+                    n = read(nuevoSocket, buffer, 1);
+                    if (buffer[0] == 'N') {
+                        n = read(nuevoSocket, buffer, tamano - 1);
+                        buffer[n] = '\0';
+                        string nombre(buffer);
+                        nickname[nombre] = nuevoSocket;
+                        nombres_por_socket[nuevoSocket] = nombre;
+                        cout << "!!bienvenido!! --> " << nombre << endl;
+                        FD_SET(nuevoSocket, &master_set);
+                        if (nuevoSocket > max_sd) max_sd = nuevoSocket;
+                    } else {
+                        close(nuevoSocket);
+                    }
+
+                } else {
+
+
+                  cout<<"si entre1"<< flush;
+                    string nombre = nombres_por_socket[i];
+                    bool desconectado = false;
+
+                    char buffer[201];
+                    int n = read(i, buffer, 5);
+                    
+                    if (n <= 0) {
+                        
+                        desconectado = true;
+                    } else {
+                     
+                        buffer[n] = '\0';
+                        int tamano = atoi(buffer);
+                        n = read(i, buffer, 1);
+                        if (n <= 0) {
+                            desconectado = true;
+                        } 
+                      
+                        
+                        else {
+                          
+                            char tipo = buffer[0];
+
+                            if(tipo=='Q'){
+                             
+                              desconectado = true;
+                            } 
+                            else {procesarMensaje(i, nombre, tipo);}
+                        }
+                    }
+
+                    if (desconectado) {
+                        cout << "Cliente desconectado: " << nombre << endl;
+                        close(i);
+                        FD_CLR(i, &master_set);
+                        nickname.erase(nombre);
+                        nombres_por_socket.erase(i);
+                    }
+                }
+            }
+        }
+    }
+
     close(SocketFD);
-    exit(EXIT_FAILURE);
-  }
-
-  if (-1 == listen(SocketFD, 10))
-  {
-    perror("error listen failed");
-    close(SocketFD);
-    exit(EXIT_FAILURE);
-  }
-
-  for (;;)
-  {
-    int ClientFD = accept(SocketFD, NULL, NULL);
-
-    if (0 > ClientFD)
-    {
-      perror("error accept failed");
-      close(SocketFD);
-      exit(EXIT_FAILURE);
-    }
-    //listSockets.push_back(ClientFD);
-    
-    int n = read(ClientFD , buffer, 5);
-    buffer[n] = '\0';
-    
-    //string nombre=string(buffer,n);
-    //printf("%s\n",buffer);
-    int tamano = atoi(buffer);
-    
-    
-    n = read(ClientFD , buffer, 1);
-    if (buffer[0]=='N'){
-        n = read(ClientFD , buffer,tamano-1);
-        buffer[n]='\0';
-        printf("!!bienvenido!! --> ");
-        printf("%s\n",buffer);
-
-        nickname[buffer]=ClientFD;
-        std::thread(readSocketThread, ClientFD,buffer).detach();
-
-
-    }
-    
-    else{
-
-        shutdown(ClientFD, SHUT_RDWR);
-        close(ClientFD);
-    }
-    
-    
-    
-
-    //std::thread(writeSocketThread, ClientFD).detach();
-
-  }
-
-  //close(SocketFD);
-  return 0;
+    return 0;
 }

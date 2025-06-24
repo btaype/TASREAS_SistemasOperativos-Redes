@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include<iostream>
-#include <openssl/sha.h> 
+
 using namespace std;
 bool controlmsg = 1;
 const char* para = "para";
@@ -402,7 +402,7 @@ int main(void) {
     memset(&stSockAddr, 0, sizeof(struct sockaddr_in));
 
     stSockAddr.sin_family = AF_INET;
-    stSockAddr.sin_port = htons(1100);
+    stSockAddr.sin_port = htons(7200);
     Res = inet_pton(AF_INET, "127.0.0.1", &stSockAddr.sin_addr);
 
     if (0 > Res) {
@@ -490,26 +490,7 @@ int main(void) {
         }
     }
 
-    /*do {
-        controlmsg = 1;
-        printf("%s : ", para);
-        fflush(stdout);
-        fgets(buffer, 100, stdin);
-        n = strlen(buffer);
-        buffer[n - 1] = '\0'; // Eliminar el newline
-        printf("%d\n", n);
-        write(SocketFD, buffer, n-1);
-        
-        controlmsg = 0;
-        printf("%s : ", msgg);
-        fflush(stdout);
-        fgets(buffer, 100, stdin);
-        n = strlen(buffer);
-        buffer[n - 1] = '\0'; // Eliminar el newline
-        write(SocketFD, buffer, n-1);
-
-    } while (strncmp(buffer, "exit", 4) != 0);
-    */
+    
 
     shutdown(SocketFD, SHUT_RDWR);
     close(SocketFD);
