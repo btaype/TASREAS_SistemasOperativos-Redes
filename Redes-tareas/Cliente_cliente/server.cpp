@@ -506,7 +506,7 @@ int main() {
                 } else {
 
 
-                  cout<<"si entre1"<< flush;
+                  
                     string nombre = nombres_por_socket[i];
                     bool desconectado = false;
 
