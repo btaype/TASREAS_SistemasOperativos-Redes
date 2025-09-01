@@ -101,7 +101,6 @@ void reads(void*arg){
   } 
     
     shutdown(SocketFD, SHUT_RDWR);
-    
     close(SocketFD);
     
     return 0;
