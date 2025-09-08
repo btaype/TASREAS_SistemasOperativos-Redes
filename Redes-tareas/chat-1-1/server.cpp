@@ -10,79 +10,128 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include<map>
 using namespace std;
 
 bool salida = 1;
-string nick;
+map<string,int>nick;
 
 
-int numero_read(int sockt, int cont) {
-    char nume[16];                      
-    int n = read(sockt, nume, cont);
-    if (n <= 0) return 0;
-    nume[n] = '\0';
+string int_String(int n,int tamano){
+
+  string num=to_string(n);
+  int n1= tamano - num.size();
+  for (int i=n1;i>0;i--){
+    num=string("0")+num;
+
+  } 
+  return num;
+}
+int numero_read(int sockt,int cont){
+    char nume[9];
+    int n=read (sockt,nume,cont);
+    nume[n]='\0';
     return atoi(nume);
 }
+string texto_read(int sockt, int cont){
+    char text[256];
+    int n=read (sockt,text,cont);
+    text[n]='\0';
+    return string(text);
+}
 
-string texto_read(int sockt, int cont) {
-    string out;
-    out.resize(cont);
-    int leidos = 0;
-    while (leidos < cont) {
-        int n = read(sockt, &out[leidos], cont - leidos);
-        if (n <= 0) {
-            out.resize(max(0, leidos));
+void Error_(int sock,int error){
+    string err="Error no identificado";
+    if (error==1){
+        err="NickName ya existe";
+
+    }
+    else if (error==2){
+        err="No existe NickName";
+    }
+    string total=string("E")+int_String(err.size(),3)+err;
+    write(sock,total.c_str(),total.size());
+
+}
+
+
+
+void  readd(int sock,string name){
+    char texto2[2];
+    while (1){
+        int n=read(sock,texto2,1);
+        if (n<=0){
+            
             break;
         }
-        leidos += n;
-    }
-    return out;
-}
-
-
-void readd(int sock) {
-    char texto2[2];
-    while (1) {
-        int n = read(sock, texto2, 1);
-        if (n <= 0) {
-            salida = 0;
-            return;
-        }
-
-        if (texto2[0] == 'n') {
-            int tamano = numero_read(sock, 2);
-            string texto3 = texto_read(sock, tamano);
-            cout << "Nickname Entrante: " << texto3 << '\n';
-            nick = texto3;
-        }
-
-        if (texto2[0] == 'm') {
-            int tamano = numero_read(sock, 3);
-            string texto3 = texto_read(sock, tamano);
-            cout << '<' << nick << '>' << " dice: " << texto3 << '\n';
-
-            if (texto3 == "chau") {
-                salida = 0;
-                cout << "cerrando thread\n";
-                break;
+        if (texto2[0]=='m'){
+            int tamano=numero_read(sock,3);
+            string texto=texto_read(sock,tamano);
+            
+            string total=string("M")+int_String(name.size(),2)+name+int_String(tamano,3)+texto;
+            printf("\nEnviando--[%s]\n=%s",name.c_str(),total.c_str());
+            for (auto &par : nick) {
+                
+                write(par.second ,total.c_str(),total.size());
+                
             }
-        }
-    }
 
+            
+
+        }
+        else if (texto2[0]=='t'){
+
+            int tamano=numero_read(sock,2);
+            string destino=texto_read(sock,tamano);
+            tamano= numero_read(sock,3);
+            string texto=texto_read(sock,tamano);
+
+            auto it = nick.find(destino);
+
+            if (it != nick.end()) {
+                string total=string("T")+int_String(name.size(),2)+name+int_String(tamano,3)+texto;
+                printf("\nEnviando--[%s]=%s\n",name.c_str(),total.c_str());
+                fflush(stdout);
+                write(nick[destino],total.c_str(),total.size());
+
+            } else {
+                
+               Error_(sock,2);
+            }
+           
+
+        }
+         else if (texto2[0]=='l'){
+            
+            fflush(stdout);
+            string total=string("L")+int_String(nick.size()-1,2);
+            for (auto &par : nick) {
+                if (par.first!= name) {
+                total=total+int_String(par.first.size(),2)+par.first;
+                
+                }
+                
+            }
+            printf("\nEnviando--[%s]=%s\n",name.c_str(),total.c_str());
+            fflush(stdout);
+            write(sock,total.c_str(),total.size());
+
+        
+
+        }
+
+         else if (texto2[0]=='x'){
+            printf("\n SALIENDO -- %s\n",name.c_str());
+            nick.erase(name);
+            break;
+            
+         }
+    }
     shutdown(sock, SHUT_RDWR);
     close(sock);
-}
-
-
-bool write_msg(int sock, string msg) {
-    char send2[4];
-    sprintf(send2, "%03d", (int)msg.size());
-    
-    string enviar = string("m") + string(send2) + msg;
-    printf("write:  %s\n", enviar.c_str());
-    int n = write(sock, enviar.c_str(), (int)enviar.size());
-    if (n < 0) return 0;
-    return 1;
+    printf("\n[%s]-> SALIENDO\n",name.c_str());
+    nick.erase(name);
+    fflush(stdout);
 }
 
 int main() {
@@ -110,48 +159,37 @@ int main() {
     while (true) {
         int ConnectFD = accept(SocketFD, nullptr, nullptr);
         if (ConnectFD < 0) { perror("accept"); continue; }
+        
+        char texto2[2];
 
-        salida = 1;
-        nick.clear();
+        int n1=read(ConnectFD,texto2,1);
+        if (texto2[0]=='n'){
+            n1= numero_read(ConnectFD,2);
+            string name=texto_read(ConnectFD,n1);
+     
 
-        
-        thread p1(readd, ConnectFD);
-        p1.detach();
+            auto it = nick.find(name);
 
-        
-        string miNick;
-        cout << "Tu Nick (servidor): ";
-        
-        if (cin.peek() == '\n') cin.ignore();
-        getline(cin, miNick);
-       
-        
-            char num[4];
-            sprintf(num, "%02d", (int)miNick.size());
-            string send1 = string("n") + string(num) + miNick;
-            write(ConnectFD, send1.c_str(), (int)send1.size());
-        
-
-        
-        while (salida) {
-            string texto;
-            cout << "\nmsg: ";
-           getline(cin, texto);
-
-            if (texto == "chau") {
-               
-                write_msg(ConnectFD, texto);
-                break;
+            if (it != nick.end()) {
+                
+                Error_(ConnectFD,1);
+                continue;
+            } else {
+                printf("\n Cliente : %s\n",name.c_str());
+                nick[name]=ConnectFD;
+                thread p1(readd, ConnectFD,name);
+                p1.detach();
             }
 
-            bool r = write_msg(ConnectFD, texto);
-            if (!r) break;
         }
 
-        shutdown(ConnectFD, SHUT_RDWR);
-        close(ConnectFD);
-
-        cout << "Sesion cerrada. Aceptando otro cliente...\n";
+        
+        
+        
+        
+        
+        
+        
     }
 
     close(SocketFD);

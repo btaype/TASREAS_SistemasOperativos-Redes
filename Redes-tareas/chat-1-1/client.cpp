@@ -10,7 +10,16 @@
 using namespace std;
 bool salida=1;
 string nick;
+string int_String(int n,int tamano){
 
+  string num=to_string(n);
+  int n1= tamano - num.size();
+  for (int i=n1;i>0;i--){
+    num=string("0")+num;
+
+  } 
+  return num;
+}
 int numero_read(int sockt,int cont){
     char nume[9];
     int n=read (sockt,nume,cont);
@@ -23,6 +32,9 @@ string texto_read(int sockt, int cont){
     text[n]='\0';
     return string(text);
 }
+
+
+// Threads --> Reads
 void  readd(int sock){
     char texto2[2];
     while (1){
@@ -30,37 +42,82 @@ void  readd(int sock){
         if (n<=0){
             return;
         }
-        if (texto2[0]=='n'){
-            int tamano=numero_read(sock,2);
-            string texto3= texto_read(sock,tamano);
-            printf("Nickname Entrante: %s\n", texto3.c_str());
-            nick=texto3;
+        if (texto2[0]=='M'){
+          int tamano=numero_read(sock,2);
+          string source=texto_read(sock,tamano);
+          tamano= numero_read(sock,3);
+          string texto=texto_read(sock,tamano);
+          printf("\n[ %s ] = %s\n",source.c_str(),texto.c_str());
+          fflush(stdout);
+
         }
-        if (texto2[0]=='m'){
+        else if (texto2[0]=='T'){
+           int tamano=numero_read(sock,2);
+            string source=texto_read(sock,tamano);
+            tamano= numero_read(sock,3);
+            string texto=texto_read(sock,tamano);
+            printf("\n[ %s ] = %s\n",source.c_str(),texto.c_str());
+            fflush(stdout);
+        }
+         else if (texto2[0]=='L'){
+           int tamano=numero_read(sock,2);
+            printf("\n-----LISTA-------:\n");
+            fflush(stdout);
+            tamano--;
+           for (;tamano>=0;tamano--){
+
+                
+                int tamano2= numero_read(sock,2);
+                string texto=texto_read(sock,tamano2);
+                printf(" [ %s ] \n",texto.c_str());
+                fflush(stdout);
+        }
+        
+
+        }
+
+         else if (texto2[0]=='E'){
             int tamano=numero_read(sock,3);
-            string texto3= texto_read(sock,tamano);
-            printf("<%s> dice: %s\n", nick.c_str(), texto3.c_str());
-            if (texto3.compare("chau") == 0){
-                salida=0;
-                printf("cerrando thread\n");
-                break;
-            }
-        }
+            string source=texto_read(sock,tamano);  
+            printf("\n[Error]: %s\n",source.c_str());
+            fflush(stdout);
+
+         }
     }
     shutdown(sock, SHUT_RDWR);
     close(sock);
 }
-bool write_msg(int sock, string msg ){
+
+
+void write_broadcast(int sock, string msg ){
     char send2[4];
     sprintf(send2,"%03d",(int)msg.size());
     string enviar=string("m")+string(send2)+msg;
     printf("write:  %s\n", enviar.c_str());
     int n=write(sock,enviar.c_str(),enviar.size());
-    if(n<0){
-        return 0;
-    }
-    return 1;
+    return;
 }
+void salir(int sock){
+  string sa=string("x");
+  int n=write(sock,sa.c_str(),1);
+}
+
+
+void msg_client(int sock, string msg ,string client ){
+  
+  string send2=string("t")+int_String(client.size(),2)+client+int_String(msg.size(),3)+msg;
+  printf("%s\n",send2.c_str());
+  write(sock,send2.c_str(),send2.size());
+
+
+}
+
+void list_client(int sock){
+  string sa=string("l");
+  int n=write(sock,sa.c_str(),1);
+}
+
+
 int main() {
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (sock_fd < 0) { perror("socket"); return 1; }
@@ -71,26 +128,61 @@ int main() {
     if (connect(sock_fd, (sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("connect"); close(sock_fd); return 1;
     }
+
     string texto;
     printf("Nickname: ");
     getline(cin, texto);
+
     char num[4];
     sprintf(num,"%02d",(int)texto.size());
+
     string send1=string("n")+string(num)+texto;
+
     printf("%s\n", send1.c_str());
     write(sock_fd,send1.c_str(),send1.size());
+
     thread p1(readd, sock_fd);
     p1.detach();
+    int option=0;
     while(salida){
-        printf("\nmsg: ");
-        getline(cin, texto);
-        if (texto.compare("chau") == 0){
-            break;
+        printf("\nMENU");
+        printf("\n1: Broadcast");
+        printf("\n2: msg client");
+        printf("\n3: List client");
+        printf("\n4: Salir");
+        printf("\nOPTION: ");
+        cin>>option;
+        cin.ignore();
+        if (option==1){
+          printf("\n Broadcast msg : ");
+          getline(cin,texto);
+          write_broadcast(sock_fd,texto);
+        
+
+      }
+        else if (option==2){
+          string para1;
+          printf("\n para : ");
+          getline(cin,para1);
+          printf("\n msg : ");
+          getline(cin,texto);
+          msg_client(sock_fd, texto ,para1 );
+
+
         }
-        bool r=write_msg(sock_fd, texto );
-        if(!r){
-            break;
+
+        else if (option==3){
+          list_client(sock_fd);
+
+
         }
+        else if ( option==4){
+          salir(sock_fd);
+          break;
+        }
+
+        
+        
     }
     shutdown(sock_fd, SHUT_RDWR);
     close(sock_fd);
