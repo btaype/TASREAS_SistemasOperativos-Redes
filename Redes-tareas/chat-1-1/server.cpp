@@ -1,4 +1,3 @@
-
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -12,6 +11,7 @@
 
 #include<map>
 using namespace std;
+constexpr int BUFFER_SIZE = 300;
 
 bool salida = 1;
 map<string,int>nick;
@@ -33,12 +33,89 @@ int numero_read(int sockt,int cont){
     nume[n]='\0';
     return atoi(nume);
 }
+long numero_read2(int sockt,int cont){
+    char nume[1000];
+    int n=read (sockt,nume,cont);
+    nume[n]='\0';
+    return atol(nume);
+}
+
+
+
+string read_textLong(int sockt,int t){
+    char text[BUFFER_SIZE];
+    int t2=BUFFER_SIZE;
+
+    if (t<BUFFER_SIZE){
+        t2=t;
+    }
+    string total;
+    total.reserve(t2);
+    int sum=0;
+    
+    while(t2){
+        int n=read (sockt,text,t2);
+        
+        
+        total.append(text,(size_t)n);
+        
+        t2=t2-n;
+    }
+
+    
+    
+    return  total;
+}
+string int_String2(long n,int tamano){
+
+  string num=to_string(n);
+  int n1= tamano - num.size();
+  for (int i=n1;i>0;i--){
+    num=string("0")+num;
+
+  } 
+  return num;
+}
+
+string recv_File(int sock, long tamano){
+    string total;
+    total.reserve(tamano); 
+    int r=0;
+    while(tamano){
+        if(tamano-BUFFER_SIZE>=0){
+        int dd=BUFFER_SIZE;
+        string sub = read_textLong(sock,BUFFER_SIZE);
+        fflush(stdout);
+
+         total.append(sub.data(), sub.size());
+        tamano=tamano-BUFFER_SIZE;
+        r++;
+        
+        }
+        else {
+            
+            
+           string sub=read_textLong(sock,static_cast<int>(tamano));  
+           total.append(sub.data(), sub.size());
+            r++;
+            break;
+            
+        }
+        
+
+    }
+    printf("\nnum->%d",r);
+    fflush(stdout);
+    return total;
+
+}
 string texto_read(int sockt, int cont){
     char text[256];
     int n=read (sockt,text,cont);
     text[n]='\0';
     return string(text);
 }
+
 
 void Error_(int sock,int error){
     string err="Error no identificado";
@@ -124,6 +201,27 @@ void  readd(int sock,string name){
             printf("\n SALIENDO -- %s\n",name.c_str());
             nick.erase(name);
             break;
+            
+         }
+          else if (texto2[0]=='f'){
+            int t1=numero_read(sock,2);
+            string desde=texto_read(sock,t1);
+            t1=numero_read(sock,3);
+            string nameF= texto_read(sock,t1);
+            
+            long t2= numero_read2(sock,15);
+            string contenido=recv_File(sock,t2);
+
+            FILE* f = fopen(string(desde+nameF).c_str(), "wb");
+            if (!f) {
+                perror("No se pudo crear el archivo");
+               
+                break;
+            }
+            fwrite(contenido.data(), 1, t2, f);
+            fclose(f);
+            
+
             
          }
     }

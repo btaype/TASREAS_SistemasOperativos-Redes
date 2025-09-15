@@ -5,12 +5,22 @@
 #include <unistd.h>
 #include <cstring>
 #include <string>
-
+#include <cstdio>
 #include <thread>
 using namespace std;
 bool salida=1;
 string nick;
 string int_String(int n,int tamano){
+
+  string num=to_string(n);
+  int n1= tamano - num.size();
+  for (int i=n1;i>0;i--){
+    num=string("0")+num;
+
+  } 
+  return num;
+}
+string int_String2(long n,int tamano){
 
   string num=to_string(n);
   int n1= tamano - num.size();
@@ -116,7 +126,42 @@ void list_client(int sock){
   string sa=string("l");
   int n=write(sock,sa.c_str(),1);
 }
+void enviarFIle(int sock){
+          string texto;
+          string para1;
+          printf("\n para : ");
+          getline(cin,para1);
+          printf("\n file name : ");
+          getline(cin,texto);
+     FILE* file = fopen(texto.c_str(), "rb");
+    if (!file) {
+        perror("No se pudo abrir el archivo");
+        return;
+    }
 
+    
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    rewind(file);
+
+    string file_data;
+    file_data.resize(file_size);
+    
+    fread(file_data.data(), 1, file_size, file);
+    fclose(file);
+
+    string total1= string("f")+int_String(para1.size(),2)+para1+int_String(texto.size(),3)+texto+ int_String2(file_size,15);
+    printf("\ncabezeraFlie---%s\n",total1.c_str());
+    for (size_t i = 0; i < file_data.size(); i++) {
+        putchar(file_data[i]);
+    }
+    
+    write(sock,total1.data(),total1.size());
+    write(sock,file_data.data(),file_size);
+    
+
+          
+}
 
 int main() {
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -140,7 +185,7 @@ int main() {
 
     printf("%s\n", send1.c_str());
     write(sock_fd,send1.c_str(),send1.size());
-
+    
     thread p1(readd, sock_fd);
     p1.detach();
     int option=0;
@@ -149,7 +194,8 @@ int main() {
         printf("\n1: Broadcast");
         printf("\n2: msg client");
         printf("\n3: List client");
-        printf("\n4: Salir");
+        printf("\n4 Enviar Archivo");
+        printf("\n5: Salir");
         printf("\nOPTION: ");
         cin>>option;
         cin.ignore();
@@ -176,7 +222,12 @@ int main() {
 
 
         }
-        else if ( option==4){
+        else if(option==4){
+
+          enviarFIle(sock_fd);
+
+        }
+        else if ( option==5){
           salir(sock_fd);
           break;
         }
