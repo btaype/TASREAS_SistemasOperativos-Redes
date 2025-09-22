@@ -17,6 +17,58 @@ bool salida = 1;
 map<string,int>nick;
 
 
+#include <iostream>
+#include <cstring>
+#include <cstdint>
+#include <string>
+#include <unistd.h>
+#include <arpa/inet.h>
+
+#pragma pack(push, 1)
+
+struct Silla {
+    int32_t id;
+    char material[50];
+    float altura;
+    float peso;
+};
+
+struct Mesa {
+    int32_t id;
+    char tipo[50];
+    float largo;
+    float ancho;
+};
+
+struct Cocina {
+    int32_t id;
+    char estilo[50];
+    int32_t numHornillas;
+    uint8_t tieneHorno;
+};
+
+struct Sala {
+    Silla silla;
+    Mesa mesa;
+    Cocina *cocina;
+    int32_t numeroVentanas;
+    char descripcion[1000];
+};
+
+
+
+Sala deserializarSala(const std::string &buffer) {
+    Sala sala{};
+    size_t baseSize = sizeof(Sala) - sizeof(Cocina*);
+
+    std::memcpy(&sala, buffer.data(), baseSize);
+
+    sala.cocina = new Cocina;
+    std::memcpy(sala.cocina, buffer.data() + baseSize, sizeof(Cocina));
+
+    return sala;
+}
+
 string int_String(int n,int tamano){
 
   string num=to_string(n);
@@ -206,23 +258,63 @@ void  readd(int sock,string name){
           else if (texto2[0]=='f'){
             int t1=numero_read(sock,2);
             string desde=texto_read(sock,t1);
-            t1=numero_read(sock,3);
-            string nameF= texto_read(sock,t1);
+            int t4=numero_read(sock,3);
+            string nameF= texto_read(sock,t4);
             
-            long t2= numero_read2(sock,15);
+            long t2= numero_read2(sock,10);
             string contenido=recv_File(sock,t2);
 
+            string leer= int_String(t1,2)+desde+int_String(t4,3)+nameF+int_String2(t2,10);
+            printf("\nREAD---%c%s\n",texto2[0],leer.c_str());
+            fflush(stdout);
+
+            
+             auto it = nick.find(desde);
+
+            if (it != nick.end()) {
+                string totalHead=string("F")+int_String(name.size(),2)+name+int_String(t4,3)+nameF+int_String2(t2,10);
+                printf("\nWRITE---%s\n",totalHead.c_str());
+
+                write(nick[desde],totalHead.c_str(),totalHead.size());
+                write(nick[desde],contenido.data(),contenido.size());
+            }
+            /* 
             FILE* f = fopen(string(desde+nameF).c_str(), "wb");
             if (!f) {
                 perror("No se pudo crear el archivo");
-               
                 break;
             }
             fwrite(contenido.data(), 1, t2, f);
             fclose(f);
-            
+            */
 
             
+         }
+         else if(texto2[0]=='J'){
+
+            std::string buffer;
+            buffer.resize(sizeof(Sala) - sizeof(Cocina*) + sizeof(Cocina));
+            read(sock, buffer.data(), buffer.size());
+            Sala sala = deserializarSala(buffer);
+
+            std::cout << "Sala recibida:\n";
+    std::cout << "  Silla: id=" << sala.silla.id 
+              << ", material=" << sala.silla.material 
+              << ", altura=" << sala.silla.altura 
+              << ", peso=" << sala.silla.peso << "\n";
+
+    std::cout << "  Mesa: id=" << sala.mesa.id 
+              << ", tipo=" << sala.mesa.tipo 
+              << ", largo=" << sala.mesa.largo 
+              << ", ancho=" << sala.mesa.ancho << "\n";
+
+    std::cout << "  Cocina: id=" << sala.cocina->id 
+              << ", estilo=" << sala.cocina->estilo 
+              << ", hornillas=" << sala.cocina->numHornillas 
+              << ", horno=" << (sala.cocina->tieneHorno ? "Sí" : "No") << "\n";
+
+    std::cout << "  Ventanas: " << sala.numeroVentanas << "\n";
+    std::cout << "  Descripción: " << sala.descripcion << "\n";
          }
     }
     shutdown(sock, SHUT_RDWR);
