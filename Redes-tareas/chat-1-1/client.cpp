@@ -7,6 +7,7 @@
 #include <string>
 #include <cstdio>
 #include <thread>
+#include <arpa/inet.h>  
 using namespace std;
 bool salida=1;
 constexpr int BUFFER_SIZE = 300;
@@ -18,37 +19,133 @@ string nick;
 #include <cstdint> 
 
 #pragma pack(push, 1) 
-struct Silla {
-    int32_t id;         
-    char material[50];  
-    float altura;       
-    float peso;        
-   
-};
-
-struct Mesa {
-    int32_t id;          
-    char tipo[50];      
-    float largo;        
-    float ancho;        
-    
-};
-
-struct Cocina {
-    int32_t id;             
-    char estilo[50];        
-    int32_t numHornillas;  
-    uint8_t tieneHorno;     
-    
-};
 
 struct Sala {
-    Silla silla;           
-    Mesa mesa;              
-    Cocina *cocina;          
-    int32_t numeroVentanas;
+    int id;  
+    int numeroVentanas;
     char descripcion[1000]; 
+    string nombre;
+    float largo;
+    float ancho;
+
+  static uint32_t floatToNetwork(float f) {
+        uint32_t temp;
+        std::memcpy(&temp, &f, sizeof(float));
+        return htonl(temp);
+    }
+
+    static float networkToFloat(uint32_t net) {
+        uint32_t temp = ntohl(net);
+        float f;
+        std::memcpy(&f, &temp, sizeof(float));
+        return f;
+    }
+  std::string serializarSala(const Sala &s) {
+    std::string buffer;
+
+  
+
     
+        uint32_t id_net = htonl(id);
+        buffer.append(reinterpret_cast<const char*>(&id_net), 4);
+
+        
+        uint32_t ventanas_net = htonl(numeroVentanas);
+        buffer.append(reinterpret_cast<const char*>(&ventanas_net), 4);
+
+        
+        uint32_t len_nombre = htonl(nombre.size());
+        buffer.append(reinterpret_cast<const char*>(&len_nombre), 4);
+        buffer.append(nombre);
+
+        
+        uint32_t len_desc = htonl(std::strlen(descripcion));
+        buffer.append(reinterpret_cast<const char*>(&len_desc), 4);
+        buffer.append(descripcion, std::strlen(descripcion));
+
+        
+        int parteEnteraL = static_cast<int>(largo);
+        int parteDecimalL = static_cast<int>((largo - parteEnteraL) * 1000000);
+
+        cout<< parteEnteraL<<" ; " <<parteDecimalL<<endl;
+
+        uint32_t enteroL_net = htonl(parteEnteraL);
+        uint32_t decimalL_net = htonl(parteDecimalL);
+        buffer.append(reinterpret_cast<const char*>(&enteroL_net), 4);
+        buffer.append(reinterpret_cast<const char*>(&decimalL_net), 4);
+
+       
+
+        int parteEnteraA = static_cast<int>(ancho);
+        int parteDecimalA = static_cast<int>((ancho - parteEnteraA) * 1000000);
+
+        uint32_t enteroA_net = htonl(parteEnteraA);
+        uint32_t decimalA_net = htonl(parteDecimalA);
+        buffer.append(reinterpret_cast<const char*>(&enteroA_net), 4);
+        buffer.append(reinterpret_cast<const char*>(&decimalA_net), 4);
+
+
+        return buffer;
+
+  }
+static  Sala deserializarSala(const std::string &buffer) {
+    Sala s;
+        size_t offset = 0;
+
+      
+        uint32_t id_net;
+        std::memcpy(&id_net, buffer.data() + offset, 4);
+        s.id = ntohl(id_net);
+        offset += 4;
+
+        
+        uint32_t ventanas_net;
+        std::memcpy(&ventanas_net, buffer.data() + offset, 4);
+        s.numeroVentanas = ntohl(ventanas_net);
+        offset += 4;
+
+       
+        uint32_t len_nombre_net;
+        std::memcpy(&len_nombre_net, buffer.data() + offset, 4);
+        uint32_t len_nombre = ntohl(len_nombre_net);
+        offset += 4;
+
+        s.nombre.assign(buffer.data() + offset, len_nombre);
+        offset += len_nombre;
+
+       
+        uint32_t len_desc_net;
+        std::memcpy(&len_desc_net, buffer.data() + offset, 4);
+        uint32_t len_desc = ntohl(len_desc_net);
+        offset += 4;
+
+        std::memcpy(s.descripcion, buffer.data() + offset, len_desc);
+        s.descripcion[len_desc] = '\0'; 
+
+        offset +=len_desc;
+
+        uint32_t enteroL_net, decimalL_net;
+        std::memcpy(&enteroL_net, buffer.data() + offset, 4);
+        offset += 4;
+        std::memcpy(&decimalL_net, buffer.data() + offset, 4);
+        offset += 4;
+
+       
+        int parteEnteraL = ntohl(enteroL_net);
+        int parteDecimalL = ntohl(decimalL_net);
+        s.largo = parteEnteraL + (parteDecimalL / 1000000.0f);
+
+        
+        uint32_t enteroA_net, decimalA_net;
+        std::memcpy(&enteroA_net, buffer.data() + offset, 4);
+        offset += 4;
+        std::memcpy(&decimalA_net, buffer.data() + offset, 4);
+        offset += 4;
+        int parteEnteraA = ntohl(enteroA_net);
+        int parteDecimalA = ntohl(decimalA_net);
+        s.ancho = parteEnteraA + (parteDecimalA / 1000000.0f);
+        return s;
+}
 };
 
 #pragma pack(pop)
@@ -224,6 +321,33 @@ void  readd(int sock){
             fclose(f);
 
          }
+        else if (texto2[0]=='O'){
+            int t1=numero_read(sock,2);
+            string desde=texto_read(sock,t1);
+            
+            
+            
+            long t2= numero_read2(sock,10);
+            string contenido=recv_File(sock,t2);
+
+            string leer= int_String(t1,2)+desde+int_String2(t2,10);
+            printf("\nREAD---%c%s\n",texto2[0],leer.c_str());
+            Sala S1=Sala::deserializarSala(contenido);
+
+          
+            std::cout << "ID: " << S1.id << "\n";
+            std::cout << "Ventanas: " << S1.numeroVentanas << "\n";
+            std::cout << "Nombre: " << S1.nombre << "\n";
+            std::cout << "Descripcion: " << S1.descripcion << "\n";
+            std::cout << "Largo: " << S1.largo << "\n";
+            std::cout << "Ancho: " << S1.ancho << "\n";
+
+           
+
+         }
+
+
+
     }
     shutdown(sock, SHUT_RDWR);
     close(sock);
@@ -292,60 +416,35 @@ void enviarFIle(int sock){
 
           
 }
-std::string serializarSala(const Sala &sala) {
-    std::string buffer;
 
-    size_t baseSize = sizeof(Sala) - sizeof(Cocina*);
-    buffer.resize(baseSize);
-    std::memcpy(buffer.data(), &sala, baseSize);
-
-    size_t offset = buffer.size();
-    buffer.resize(offset + sizeof(Cocina));
-    std::memcpy(buffer.data() + offset, sala.cocina, sizeof(Cocina));
-
-    return buffer;
-}
 void writeObjecto(int sock){
 
-    Sala sala;
-    string sa=string("J");
-    int n=write(sock,sa.c_str(),1);
-    sala.silla = {1, "Madera", 1.2f, 5.0f};
-    sala.mesa = {2, "Rectangular", 2.0f, 1.0f};
-    sala.cocina = new Cocina{3, "Moderna", 4, 1};
-    sala.numeroVentanas = 2;
-    strcpy(sala.descripcion, "Sala con comedor y cocina integrada");
+  Sala sala1;
+  sala1.id = 42;
+  sala1.numeroVentanas = 3;
+  sala1.nombre = "Sala de Conferencias";
+  std::strncpy(sala1.descripcion, "Espacio amplio con proyector y sillas.", sizeof(sala1.descripcion));
+  sala1.largo = 12.5f;
+  sala1.ancho = 8.75f;
 
+  std::cout << "ID: " << sala1.id << "\n";
+  std::cout << "Ventanas: " << sala1.numeroVentanas << "\n";
+  std::cout << "Nombre: " << sala1.nombre << "\n";
+  std::cout << "Descripcion: " << sala1.descripcion << "\n";
+  std::cout << "Largo: " << sala1.largo << "\n";
+  std::cout << "Ancho: " << sala1.ancho << "\n";
+  
 
-    std::string buffer = serializarSala(sala);
+  std::string data = sala1.serializarSala(sala1);
+  string texto;
+  string para1;
+  printf("\n para : ");
+  getline(cin,para1);
+  string total1= string("o")+int_String(para1.size(),2)+para1+int_String(data.size(),10);
+  write(sock,total1.data(),total1.size()) ;
+  write(sock,data.data(),data.size());
 
-    // Enviar
-    write(sock, buffer.data(), buffer.size());
-
-    std::cout << "Sala enviada (" << buffer.size() << " bytes):\n";
-    
-    std::cout << "  Silla: id=" << sala.silla.id 
-              << ", material=" << sala.silla.material 
-              << ", altura=" << sala.silla.altura 
-              << ", peso=" << sala.silla.peso << "\n";
-
-    std::cout << "  Mesa: id=" << sala.mesa.id 
-              << ", tipo=" << sala.mesa.tipo 
-              << ", largo=" << sala.mesa.largo 
-              << ", ancho=" << sala.mesa.ancho << "\n";
-
-    std::cout << "  Cocina: id=" << sala.cocina->id 
-              << ", estilo=" << sala.cocina->estilo 
-              << ", hornillas=" << sala.cocina->numHornillas 
-              << ", horno=" << (sala.cocina->tieneHorno ? "Sí" : "No") << "\n";
-
-    std::cout << "  Ventanas: " << sala.numeroVentanas << "\n";
-    std::cout << "  Descripción: " << sala.descripcion << "\n";
-      string para1;
-      //printf("\n para : ");
-      //getline(cin,para1);
-    
-
+  
 }
 
 int main() {

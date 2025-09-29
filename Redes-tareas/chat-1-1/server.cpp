@@ -290,33 +290,25 @@ void  readd(int sock,string name){
 
             
          }
-         else if(texto2[0]=='J'){
+         else if(texto2[0]=='o'){
+            int t1=numero_read(sock,2);
+            string desde=texto_read(sock,t1);
+            long t2= numero_read2(sock,10);
+            string contenido=recv_File(sock,t2);
+            string leer= int_String(t1,2)+desde+int_String2(t2,10);
+            printf("\nREAD---%c%s\n",texto2[0],leer.c_str());
 
-            std::string buffer;
-            buffer.resize(sizeof(Sala) - sizeof(Cocina*) + sizeof(Cocina));
-            read(sock, buffer.data(), buffer.size());
-            Sala sala = deserializarSala(buffer);
+             auto it = nick.find(desde);
+            if (it != nick.end()) {
+                string totalHead=string("O")+int_String(name.size(),2)+name+int_String2(t2,10);
+                printf("\nWRITE---%s\n",totalHead.c_str());
 
-            std::cout << "Sala recibida:\n";
-    std::cout << "  Silla: id=" << sala.silla.id 
-              << ", material=" << sala.silla.material 
-              << ", altura=" << sala.silla.altura 
-              << ", peso=" << sala.silla.peso << "\n";
+                write(nick[desde],totalHead.c_str(),totalHead.size());
+                write(nick[desde],contenido.data(),contenido.size());
+            }   
 
-    std::cout << "  Mesa: id=" << sala.mesa.id 
-              << ", tipo=" << sala.mesa.tipo 
-              << ", largo=" << sala.mesa.largo 
-              << ", ancho=" << sala.mesa.ancho << "\n";
-
-    std::cout << "  Cocina: id=" << sala.cocina->id 
-              << ", estilo=" << sala.cocina->estilo 
-              << ", hornillas=" << sala.cocina->numHornillas 
-              << ", horno=" << (sala.cocina->tieneHorno ? "Sí" : "No") << "\n";
-
-    std::cout << "  Ventanas: " << sala.numeroVentanas << "\n";
-    std::cout << "  Descripción: " << sala.descripcion << "\n";
-         }
     }
+}
     shutdown(sock, SHUT_RDWR);
     close(sock);
     printf("\n[%s]-> SALIENDO\n",name.c_str());
