@@ -12,7 +12,8 @@ using namespace std;
 bool salida=1;
 constexpr int BUFFER_SIZE = 300;
 string nick;
-
+char sym;
+string tab="_________";
 //clase 
 
 
@@ -252,6 +253,28 @@ long numero_read2(int sockt,int cont){
     return atol(nume);
 }
 // Threads --> Reads
+
+void printtab(string tabl){
+    int u=0;
+    cout<<endl;
+    for (int i=0 ; i<3;i++){
+        cout<<" | ";
+        for (int j=0 ; j<3;j++){
+            cout<< tab[u];
+            cout<<" | " ;
+            u++;
+        }
+
+        cout<<endl;
+        cout<<" ----------------------- \n";
+
+
+    }
+
+
+}
+
+
 void  readd(int sock){
     char texto2[2];
     while (1){
@@ -345,6 +368,27 @@ void  readd(int sock){
            
 
          }
+         else if (texto2[0]=='V'){
+
+            char rr[3];
+            read(sock,rr,1);
+            sym=rr[0];
+            printf("\nREAD--%c%c\n",texto2[0],rr[0]);
+            fflush(stdout);
+            printf("\n<TIC TAC TOE>TU turno de Enviar tu JUgada %c\n",rr[0]);
+            fflush(stdout);
+         }
+         else if (texto2[0]=='v'){
+
+            char rr[3];
+
+            string game=texto_read(sock,9);
+            tab = game;
+            printf("\nREAD--%c%s\n",texto2[0],game.c_str());
+            fflush(stdout);
+            printtab(tab);
+
+         }
 
 
 
@@ -408,7 +452,7 @@ void enviarFIle(int sock){
 
     string total1= string("f")+int_String(para1.size(),2)+para1+int_String(texto.size(),3)+texto+ int_String2(file_size,10);
     printf("\n WRITE---%s\n",total1.c_str());
-    
+    fflush(stdout);
     
     write(sock,total1.data(),total1.size());
     write(sock,file_data.data(),file_size);
@@ -447,6 +491,50 @@ void writeObjecto(int sock){
   
 }
 
+void enviapos(int sock){
+    
+    int pos;
+    printtab(tab);
+    while(true)
+    {   
+        cout<<"\npos: ";
+        cin>>pos;
+
+        if (!(pos>=1 && pos<=9)){
+            continue;
+
+        }
+        if( sym=='W' ){
+            break;
+
+        }
+        if( tab[pos-1]== '_' ){
+            string total = "W"+to_string(pos)+ sym;
+            printf("\nWRITE--%s\n",total.c_str());
+            fflush(stdout);
+            write(sock, total.data(), total.size());
+            sym='W';
+            return;
+
+        }
+       
+        
+    }
+    
+
+   printf("\nNo es tu Turno\n");
+
+} 
+
+void enviarP(int sock){
+    string total = "P";
+    printf("\nWRITE--%s\n",total.c_str());
+    fflush(stdout);
+    write(sock, total.data(), total.size());
+    tab="_________";
+
+
+}
 int main() {
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (sock_fd < 0) { perror("socket"); return 1; }
@@ -480,8 +568,12 @@ int main() {
         printf("\n3: List client");
         printf("\n4 Enviar Archivo");
         printf("\n5 Enviar Objeto");
-        printf("\n6: Salir");
+        
+        printf("\n6: Conectar");
+        printf("\n7: Enviar pos");
+        printf("\n8: Salir");
         printf("\nOPTION: ");
+        
         cin>>option;
         cin.ignore();
         if (option==1){
@@ -516,11 +608,18 @@ int main() {
           writeObjecto(sock_fd);
 
         }
-        else if ( option==6){
+        else if ( option==8){
           salir(sock_fd);
           break;
         }
-
+        else if ( option==6){
+            enviarP(sock_fd);
+          
+          }
+          else if ( option==7){
+            enviapos(sock_fd);
+          
+          }
         
         
     }

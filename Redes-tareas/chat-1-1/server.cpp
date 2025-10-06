@@ -8,21 +8,105 @@
 #include <thread>
 #include <cstdio>
 #include <cstdlib>
-
+#include <vector>
 #include<map>
+
+#include <mutex>
+#include <cstdint>
+
+
+
+
 using namespace std;
 constexpr int BUFFER_SIZE = 300;
 
+//game para ams juagdores
+struct Ticactoe{
+    string utils="OX";
+    string game="_________";
+    map<int,char>juagadores;
+    bool tur=0;
+    char turnos[2]={'O','X'};
+
+    int canjuagdas=0;
+    bool existe(int id){
+        return this->juagadores.find(id) != this->juagadores.end();
+    }
+    void anadir(int sock){
+        if (utils.size()>0){
+        char ch=utils[0];
+        utils.erase(0,1);
+        juagadores[sock]=ch;   }
+        
+        
+    }
+     int getsock(char simbolo){
+        for (auto &p : juagadores){
+            if (p.second==simbolo){
+                return p.first;  
+            }
+        }
+        return -1; 
+    }
+    void enviarTurno(){
+        int socke=getsock(turnos[tur]);
+        if (socke!=-1){
+            string enviar="V"+string(1,turnos[tur]);
+            printf("\nWRITE--%s\n",enviar.c_str());
+            fflush(stdout);
+            write(socke,enviar.data(),2);
+            //tur=!tur;
+        }
+
+
+    }
+    void hacerjugada(int pos,int sock){
+        if (pos < 1 || pos > 9) return;              
+        if (game[pos-1]!= '_') return;                 
+        if (juagadores[sock]==turnos[tur]) {        
+            game[pos-1]=turnos[tur];                 
+            tur =!tur;     
+            canjuagdas++;                         
+        }
+    }
+    
+    char ganador(){
+        int combos[8][3] = {
+            {0,1,2}, {3,4,5}, {6,7,8}, 
+            {0,3,6}, {1,4,7}, {2,5,8}, 
+            {0,4,8}, {2,4,6}           
+        };
+
+        for (auto &c : combos){
+            char a = game[c[0]];
+            char b = game[c[1]];
+            char c3 = game[c[2]];
+
+            if (a != '_' && a == b && b == c3){
+                return a; 
+            }
+        }
+
+        return '_';
+    }
+     void Printgame(){
+        string enviar= "v"+game;
+        for (auto &p : juagadores) {
+            
+            write(p.first,enviar.data(),enviar.size());
+            printf("\nWRITE--%s\n",enviar.c_str());
+            fflush(stdout);
+            }
+     }
+    bool empate(){
+        return canjuagdas>=9;
+    }
+};
 bool salida = 1;
+
+vector<Ticactoe> salas;
 map<string,int>nick;
-
-
-#include <iostream>
-#include <cstring>
-#include <cstdint>
-#include <string>
-#include <unistd.h>
-#include <arpa/inet.h>
+mutex salas_mutex;
 
 #pragma pack(push, 1)
 
@@ -91,7 +175,6 @@ long numero_read2(int sockt,int cont){
     nume[n]='\0';
     return atol(nume);
 }
-
 
 
 string read_textLong(int sockt,int t){
@@ -182,6 +265,86 @@ void Error_(int sock,int error){
     write(sock,total.c_str(),total.size());
 
 }
+void enviarMensaje(int destino, const string &name, const string &texto){
+    string total = string("T") 
+                 + int_String(name.size(), 2) 
+                 + name 
+                 + int_String(texto.size(), 3) 
+                 + texto;
+
+    printf("\nEnviando--%s\n",total.c_str());
+    fflush(stdout);
+
+    write(destino, total.c_str(), total.size());
+}
+bool buscarSalas(int sock){
+    lock_guard<mutex> lock(salas_mutex); 
+    for (size_t i = 0; i < salas.size(); i++){
+        
+        if (salas[i].existe(sock)){
+            
+            return 0; }
+
+        else if (salas[i].utils.size() == 0){
+            continue; 
+        }
+        else {
+          
+            salas[i].anadir(sock);
+            salas[i].enviarTurno();
+            return 1;
+        }
+    }
+
+    Ticactoe salA;
+    salA.anadir(sock);
+    salas.push_back(salA);
+    return 1;
+}
+
+bool buscarmisala(int sock,int pos){
+    lock_guard<mutex> lock(salas_mutex); 
+    for (size_t i = 0; i < salas.size(); i++){
+        
+        if (salas[i].existe(sock)){
+            salas[i].hacerjugada(pos,sock);
+            salas[i].Printgame();
+            char gan=salas[i].ganador();
+            if ( gan!='_'){
+                string name="TIC TAC TOE";
+                string smg= "GANADOR -> "+string(1,gan);
+                for (auto &p : salas[i].juagadores) {
+                    enviarMensaje(p.first, name,smg);
+                }
+                salas.erase(salas.begin()+i);
+                
+                
+            }
+            else if ( salas[i].empate()){
+                string name="TIC TAC TOE";
+                string smg= "Felicidades, Qedaro empate";
+                for (auto &p : salas[i].juagadores) {
+                    enviarMensaje(p.first, name,smg);
+                }
+                salas.erase(salas.begin()+i);
+
+            }
+
+            else {
+                salas[i].enviarTurno();
+            }
+
+            return 1;
+             
+        }
+
+        
+    }
+ 
+    return 0;
+    
+}
+
 
 
 
@@ -305,9 +468,32 @@ void  readd(int sock,string name){
 
                 write(nick[desde],totalHead.c_str(),totalHead.size());
                 write(nick[desde],contenido.data(),contenido.size());
-            }   
+            }  
 
     }
+
+        else if(texto2[0]=='P'){
+            printf("\nREAD--%c\n",texto2[0]);
+            fflush(stdout);
+            if( buscarSalas(sock)){
+                printf("\nencontaste Sala\n");
+                fflush(stdout);
+            }
+            else{printf("\nNO encontaste Sala\n");}
+                
+        }
+        else if (texto2[0]=='W'){
+
+            int pos=numero_read(sock,1);
+            printf("\nREAD--%c%01d\n",texto2[0],pos);
+            fflush(stdout);
+            if(buscarmisala(sock,pos)){
+                printf("\nSI ESATS PARA EL MOVIENTO\n");
+                fflush(stdout);
+            }
+
+        }
+
 }
     shutdown(sock, SHUT_RDWR);
     close(sock);
