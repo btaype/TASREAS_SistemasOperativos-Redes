@@ -216,17 +216,10 @@ void transpuestaAbin(string nameBin,string nameBinT,long filas,long columnas){
 	size_t size=st.st_size;
 
 	double* data=(double*) mmap(NULL,size,PROT_READ,MAP_PRIVATE,fd,0);
-	if(data==MAP_FAILED){
-		close(fd);
-		return;
-	}
+	
 
 	ofstream salida(nameBinT,ios::binary);
-	if(!salida.is_open()){
-		munmap(data,size);
-		close(fd);
-		return;
-	}
+	
 
 	double valor;
 	for(long c=0;c<columnas;c++){
@@ -294,9 +287,139 @@ void multmatrixBin(string matrixA,long filasA,long columnasA,string matrixB,long
 	}
 
 	munmap(A,stA.st_size); close(fdA);
-	munmap(B,stB.st_size); close(fdB);
+	 munmap(B,stB.st_size); close(fdB);
+
 	munmap(C,filasA*columnasB*sizeof(double)); close(fdC);
 }
+
+
+
+
+void SUMARbin(vector<string> sumas, long fila, long columna, string guardar)
+{
+    long totalElem = fila * columna;
+    off_t totalBytes = (off_t)totalElem * (off_t)sizeof(double);
+
+    vector<int> fds;
+    vector<double*> maps;
+
+    
+    for( size_t i=0;i<sumas.size();i++)
+    {
+        int fd = open(sumas[i].c_str(), O_RDONLY);
+        if(fd < 0){
+            
+            return;
+        }
+
+        double* ptr = (double*)mmap(NULL, totalBytes, PROT_READ, MAP_PRIVATE,fd,0);
+
+        if(ptr == MAP_FAILED){
+            return;
+        }
+
+        fds.push_back(fd);
+        maps.push_back(ptr);
+    }
+
+    
+    int fdOut = open(guardar.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0666);
+    if(fdOut < 0){
+        return;
+    }
+
+    
+    if(ftruncate(fdOut, totalBytes) != 0){
+        close(fdOut);
+        return;
+    }
+
+    
+    double* outPtr=(double*)mmap(NULL,totalBytes,PROT_READ | PROT_WRITE,MAP_SHARED,fdOut,0);
+
+    if(outPtr == MAP_FAILED){
+        close(fdOut);
+        return;
+    }
+
+
+    for(long f=0; f<fila; f++)
+    {
+        for(long c= 0;c<columna; c++)
+        {
+            long idx= f*columna + c;
+
+            double suma=0.0;
+
+            for(double*ptr:maps)
+            {
+                suma =suma+ ptr[idx];
+            }
+
+            outPtr[idx]=suma;   
+        }
+    }
+
+    
+    munmap(outPtr,totalBytes);
+    close(fdOut);
+
+    for(size_t i=0; i<maps.size(); i++){
+        munmap(maps[i], totalBytes);
+        close(fds[i]);
+    }
+}
+
+void recive_sumas(int sock,int cantsum,string namecapta){
+    vector <string> namesworksum;
+    long filas;
+    long columnas;
+    char texto2[2];
+    for(int i=0;i<cantsum;i++){
+        int n=read(sock,texto2,1);
+            if (n<=0){
+                 printf("2dbreack\n");
+                 fflush(stdout);
+                break;
+            }
+                if (texto2[0]=='f'){
+                    printf("entro suma file\n");
+                    fflush(stdout);
+                    long x=numero_read2(sock,10);
+                    filas=x;
+                    long y=numero_read2(sock,10);
+                    columnas=y;
+                    int t4= numero_read(sock,10);
+
+                    string nameF= texto_read(sock,t4);
+                    
+                    off_t t2= numero_read3(sock,20);
+                    
+                    
+                    //recv_File(int sock,off_t tamano,string nombre_archivo,string carpeta) 
+                    recv_File(sock,t2,nameF,namecapta+"/SUMG") ;
+                    namesworksum.push_back(namecapta+"/SUMG"+"/"+nameF);
+                    
+
+
+
+                    }
+        }
+    printf("entro  SUMNAGGEN\n");
+    fflush(stdout);
+   //SUMARbin(vector<string> sumas, long fila, long columna, string guardar)
+   string almacenarsum="sumageneral.bin";
+   SUMARbin(namesworksum, filas,columnas,namecapta+"/SUMG/"+almacenarsum);
+    printf("SALIO  SUMNAGGEN\n");
+    //void enviarFIle(int sock,string name,string name2,long x, long y)
+    fflush(stdout);
+    
+    enviarFIle(sock,namecapta+"/SUMG/"+almacenarsum,"SUMAwork.bin",filas,columnas);
+    
+
+
+}
+
 void  readd(int sock,string name){
     char texto2[2];
     if (!fs::exists(name)) {
@@ -360,6 +483,17 @@ void  readd(int sock,string name){
                 }
 
           } 
+           else if (texto2[0]=='s'){
+
+                printf("entro suma\n");
+    
+                fflush(stdout);
+                int sumasnum=numero_read(sock,5);
+
+                recive_sumas( sock,sumasnum,name);
+           }
+
+
 
     }
          

@@ -23,10 +23,10 @@ void bin_a_csv(string nameBin, string nameCsv, long filas, long columnas){
 }
 
 int main(){
-    string archivoBin="muplitrans.bin";
+    string archivoBin="Gsum.bin";
     string archivoCsv="datos_recuperados.csv";
-    long filas=10;      // reemplaza con tus filas
-    long columnas=10;   // reemplaza con tus columnas
+    long filas=10000;      // reemplaza con tus filas
+    long columnas=1000;   // reemplaza con tus columnas
 
     bin_a_csv(archivoBin, archivoCsv, filas, columnas);
 

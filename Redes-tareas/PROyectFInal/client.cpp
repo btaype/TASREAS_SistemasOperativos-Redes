@@ -199,8 +199,8 @@ int main() {
     if (connect(sock_fd, (sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("connect"); close(sock_fd); return 1;
     }
-    long x=10;
-    long y=10;
+    long x=1000;
+    long y=1000;
 
     string nombreach= "matrix.csv";
 

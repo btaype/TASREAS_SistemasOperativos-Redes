@@ -16,6 +16,13 @@
 #include <sstream>
 #include <filesystem>
 #include <mutex>
+#include <fcntl.h>   
+
+#include <sys/stat.h>   
+
+#include <sys/mman.h>   
+
+
 using namespace std;
 
 namespace fs = std::filesystem;
@@ -46,17 +53,30 @@ struct Nodo {
 };
 
 vector<Nodo> recibirIpsPorts(string archivo) {
+    string linea;
+
     vector<Nodo>nodos;
+     string lineTemp;
     ifstream file(archivo);
-    if (!file.is_open()) {
-        
-        return nodos;
+    
+    bool abierto = file.is_open();
+    if(!abierto){
+        cout<< "sliendo por no abieroo\n";
+        return vector<Nodo>(0);
+
     }
 
-   string linea;
-    while (getline(file, linea)) {
+   
+    while (1) {
 
-    istringstream ss(linea);
+        if(!getline(file,lineTemp)) {
+            
+            break;
+        
+        }
+        cout<< "ddddeds\n";
+
+        istringstream ss(lineTemp);
         string ip,puerto;
 
         if (!getline(ss,ip,',')) {continue; }
@@ -70,7 +90,12 @@ vector<Nodo> recibirIpsPorts(string archivo) {
     return nodos;
 }
 void conecicion_workers(vector<Nodo> nodos) {
+     printf("conectados323232312\n");
+     fflush(stdout);
+     cout<<nodos.size()<<"   \n";
     for (size_t i=0;i<nodos.size();i++) {
+        printf("conectados34342\n");
+        fflush(stdout);
         int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
 
         if (sock_fd < 0) { perror("socket"); return ; }
@@ -85,7 +110,8 @@ void conecicion_workers(vector<Nodo> nodos) {
         orden[ord]=sock_fd;
         listsock[sock_fd]=ord;
         
-        cout<< "WORKER-->"<< contador<< "listo\n";
+         printf("conectados\n");
+        fflush(stdout);
         contador++;
     }
 
@@ -176,38 +202,6 @@ string texto_read(int sockt, int cont){
 }
 
 
-string recv_File(int sock, long tamano){
-    string total;
-    total.reserve(tamano); 
-    int r=0;
-    while(tamano){
-        if(tamano-BUFFER_SIZE>=0){
-        int dd=BUFFER_SIZE;
-        string sub = read_textLong(sock,BUFFER_SIZE);
-        fflush(stdout);
-
-         total.append(sub.data(), sub.size());
-        tamano=tamano-BUFFER_SIZE;
-        r++;
-        
-        }
-        else {
-            
-            
-           string sub=read_textLong(sock,static_cast<int>(tamano));  
-           total.append(sub.data(), sub.size());
-            r++;
-            break;
-            
-        }
-        
-
-    }
-   
-    fflush(stdout);
-    return total;
-
-}
 long numero_read2(int sockt,int cont){
     char nume[1000];
     int n=read (sockt,nume,cont);
@@ -222,10 +216,11 @@ long numero_read2(int sockt,int cont){
     string rutafin= carpetaB + "/" + carpetadiv;
     resultado_div result;
     vector<long> filas_a(div, 0);
-
-    if (!fs::exists(rutafin)) {
+    bool exite=fs::exists(rutafin);
+    if (exite==false ) {
         fs::create_directories(rutafin);
     }
+
     long filasPorParte=numlineas/div;
 
 
@@ -238,15 +233,16 @@ long numero_read2(int sockt,int cont){
     for(int parte=0;parte<div; parte++){
 
         long filasActual;
+        int pos = parte;
+        if(pos< filasExtra){
 
-        if(parte< filasExtra){
             filasActual=filasPorParte+1;
         }
         else{
             filasActual =filasPorParte;
 
         }
-        string num= to_string(parte + 1);
+        string num= to_string(pos + 1);
 
         string nombreArchivo= carpetaB+"/"+carpetadiv+"/parte_"+num+".csv";
  
@@ -256,21 +252,23 @@ long numero_read2(int sockt,int cont){
         ofstream salida(nombreArchivo);
 
         for(long i=0;i< filasActual; i++){
-
-            if(!getline(archivo,linea)){
+           
+            if(!(getline(archivo,linea))){
                 break;}
 
             salida<<linea<<'\n';
             
         }
-        filas_a[parte]=filasActual;
+        filas_a[pos]=filasActual;
 
         salida.close();
     }
 
     archivo.close();
     result.rutas=rutas;
+
     result.filas=filas_a;
+
     return  result;
 
 }
@@ -301,7 +299,7 @@ void enviarFIle(int sock,string name,string name2,long x, long y){
     write(sock,total1.data(),total1.size());
 
 
-    const size_t tamanoEnvio=1024*1024; 
+    size_t tamanoEnvio=1024*1024; 
     char buffer5[tamanoEnvio];
     size_t read3;
 
@@ -325,7 +323,9 @@ void enviarFIle(int sock,string name,string name2,long x, long y){
 }
 
 void recv_File(int sock,off_t tamano,string nombre_archivo,string carpeta) {
-    if (!fs::exists(carpeta)) {
+    bool exitearch=!fs::exists(carpeta);
+
+    if ( exitearch== false) {
         fs::create_directories(carpeta);
     }
      nombre_archivo = carpeta + "/"+nombre_archivo;
@@ -336,6 +336,7 @@ void recv_File(int sock,off_t tamano,string nombre_archivo,string carpeta) {
     }
 
     size_t sizeT = 1024 * 1024; 
+
     char* buffer = new char[sizeT];  
 
     off_t restantes=tamano;
@@ -422,25 +423,42 @@ void enviar_particiones_csv(int sockt,long filas, long columnas,string name,stri
 
 }
 
-void juntarBin(vector<string> nombreArchBin,string carpeta_guardar){
-	string nombreSalida=carpeta_guardar+"/matrixunion.bin";
+void juntarBin(vector<string> nombreArchBin,string carpeta_guardar,string nameee2){
+	string nombreSalida=carpeta_guardar+"/"+nameee2;
 
 	ofstream salida(nombreSalida,ios::binary|ios::out);
 
-	if(!salida.is_open()) return;
+	if(!salida.is_open()) {
+        
+        return;
+    }
 
 	char buffer[1024*1024];
 
 	for(size_t i=0;i<nombreArchBin.size();i++){
-		ifstream entrada(nombreArchBin[i],ios::binary);
-		if(!entrada.is_open()) continue;
 
-		while(!entrada.eof()){
+		ifstream entrada(nombreArchBin[i],ios::binary);
+
+		if((entrada.is_open())==false ) 
+        {continue;
+        
+        }
+
+		while(1){
+            if (entrada.eof()){
+                break;
+
+            }
 			entrada.read(buffer,sizeof(buffer));
 
 			streamsize leidos=entrada.gcount();
 
-			 if(leidos>0) salida.write(buffer,leidos);
+			 if(leidos>0) 
+         
+            {
+            salida.write(buffer,leidos);
+
+            }
 		}
 	entrada.close();
 	}
@@ -451,9 +469,10 @@ resultado_div divsion_bin(string matrix,string carpetaM,string carpetaB,string c
 	vector<string> rutas;
 	vector<long> filas_a(div,0);
 
+    resultado_div result;
 	string rutafin=carpetaB+"/"+carpetadiv;
     
-	if(!fs::exists(rutafin)) {
+	if(fs::exists(rutafin)==false) {
         fs::create_directories(rutafin);
 
     }
@@ -465,54 +484,109 @@ resultado_div divsion_bin(string matrix,string carpetaM,string carpetaB,string c
 	struct stat st; fstat(fd,&st);
 
 	double* data =(double*)mmap(NULL,st.st_size,PROT_READ,MAP_PRIVATE,fd,0);
+     long filaGlobal = 0;
 
 	for(int parte=0;parte<div;parte++){
 
-		long filasActual=(parte<filasExtra)?(filasPorParte+1):filasPorParte;
+		long filasActual;
+
+        if(parte<filasExtra) {
+
+            filasActual=filasPorParte+1;}
+
+        else {
+            filasActual=filasPorParte;}
 
 		string num= to_string(parte+1);
 
 		string nombreArchivo=carpetaB+"/"+carpetadiv+"/parte_"+matrix+num+".bin";
+
+
 		rutas.push_back(nombreArchivo);
 
 		ofstream salida(nombreArchivo, ios::binary);
-		for(long i=0;i<filasActual;i++){
-
-			for(long j=0;j< numColumnas;j++){
-
-				long idx=( ( (parte<filasExtra?parte*(filasPorParte+1):parte*filasPorParte) + i ) * numColumnas + j );
-				double valor=data[idx];
-
-				salida.write((char*)&valor,sizeof(double));
-			}
-		}
+		for(long i=0; i<filasActual; i++){
+            for(long j=0; j<numColumnas; j++){
+                long idx = (filaGlobal + i) * numColumnas + j;
+                double valor = data[idx];
+                salida.write((char*)&valor, sizeof(double));
+            }
+        }
 		filas_a[parte]=filasActual;
 
-
+        filaGlobal += filasActual; 
 		salida.close();
 	}
 
 	munmap(data,st.st_size);
 	close(fd);
 
-	resultado_div result;
+	
 	result.rutas=rutas;
+
 	result.filas=filas_a;
+
 	return result;
 }
 
-vector<resultado_div> division_bin_mmap(vector<string> archivos, string carpetaB, string carpetadiv, int div, long numlineas, long numColumnas){
+vector<resultado_div> division_bin_mmap(vector<string> archivos ,string carpetaM, string carpetaB, string carpetadiv, int div, long numlineas, long numColumnas){
 	vector<resultado_div> todasRutas;
-	for(auto &file:archivos){
-		resultado_div res=dividir_bin_mmap(file,carpetaB,carpetadiv,div,numlineas,numColumnas);
+
+	for(size_t i=0;i<archivos.size();i++){
+		resultado_div res=divsion_bin(archivos[i],carpetaM,carpetaB,carpetadiv,div,numlineas,numColumnas);
 		todasRutas.push_back(res);
 	}
+
 	return todasRutas;
+}
+
+
+void divsumas(int sock,vector<string> namesfiles,vector<long> filasnames,long columna,string carpAlcamacena,int worker,string&namefinall){
+    
+    int n;
+    string accionsum="s"+int_String(namesfiles.size(),5);//---->nuevo portocolo 2 sumas
+    write (sock, accionsum.data(),6);
+    for (size_t i=0; i<namesfiles.size();i++){
+        //enviarFIle(int sock,string name,string name2,long x, long y)
+
+        enviarFIle(sock,namesfiles[i],"suma"+to_string(i)+to_string(sock)+".bin",filasnames[i],columna);
+
+
+    }
+    char texto2[2];
+
+    n=read(sock,texto2,1);
+    if (texto2[0]=='f'){
+
+    string nameF;
+
+    long x=numero_read2(sock,10);
+            long filas=x;
+            long y=numero_read2(sock,10);
+            long columnas=y;
+            int t4= numero_read(sock,10);
+
+            nameF= texto_read(sock,t4);
+            
+            off_t t2= numero_read3(sock,20);
+            
+            size_t pos=nameF.rfind(".bin");
+            string nuevoNombre;
+            nuevoNombre=nameF.substr(0,pos)+to_string(worker)+nameF.substr(pos);
+            
+            recv_File(sock,t2,nuevoNombre,carpAlcamacena);
+            
+            //transpuestas[sockt][i]=carpeta+"/"+nuevoNombre;
+            namefinall=carpAlcamacena+"/"+nuevoNombre;
+
+
+    }
+
+
 }
 void  readd(int sock){
     //map <int,vector<string>> nombresBIN;
     //map <int,vector<string>> transpuestas;
-    
     
 
     //printf("entreee1\n");
@@ -555,10 +629,15 @@ void  readd(int sock){
     //( string matrix,string carpetaB,string carpetadiv,int div, long numlineas ) 
 
     string carpetaPaso="divisiones";     
+    
     resultado_div particiones=dividir_carpetas(nameM,carpeta,carpetaPaso,listsock.size(),filas); 
+
     vector<string> namepart(orden.size());
+
     vector<string> namemult(orden.size());
+
     vector<thread> hilos;
+
     string carpetadivbin="divBin";
     
     for (auto& p : orden) {
@@ -570,11 +649,39 @@ void  readd(int sock){
 
     }
 
-    // Esperar a que todos terminen
+    
     for (auto& h : hilos) {
         h.join();
     }
     //juntarBin(nombresBIN,carpeta);
+    //vector<resultado_div> division_bin_mmap(vector<string> archivos ,string carpetaM, string carpetaB, string carpetadiv, int div, long numlineas, long numColumnas){
+    string namesuma="sumas";
+    vector<resultado_div> summ=division_bin_mmap(namemult ,carpeta+"/"+carpetadivbin, carpeta, namesuma, orden.size(), columnas, columnas);
+    vector<thread> hilos2;
+    vector<string> nombreSUMAG(orden.size());
+
+    string carpetsum=carpeta+"/"+"SUMAG";
+    for (auto& p : orden) {
+        int socket = p.second;
+        vector<string> names;
+        vector<long> filasSum;
+
+        for(size_t i=0;i<summ.size();i++){
+            names.push_back(summ[i].rutas[p.first]);
+            filasSum.push_back(summ[i].filas[p.first]);
+
+        }
+        
+        hilos2.emplace_back(divsumas, socket,names,filasSum,columnas,carpetsum,p.first,ref(nombreSUMAG[p.first]));
+
+    }
+
+    
+    for (auto& h : hilos2) {
+        h.join();
+    }
+
+    juntarBin(nombreSUMAG,carpeta,"Gsum.bin");
 
     while(1){
 
