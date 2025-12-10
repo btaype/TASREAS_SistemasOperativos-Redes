@@ -675,13 +675,19 @@ void  readd(int sock){
         hilos2.emplace_back(divsumas, socket,names,filasSum,columnas,carpetsum,p.first,ref(nombreSUMAG[p.first]));
 
     }
-
+    
     
     for (auto& h : hilos2) {
         h.join();
     }
 
     juntarBin(nombreSUMAG,carpeta,"Gsum.bin");
+
+    string nombre_BIN_G=carpeta+"/Gsum.bin";
+    
+    //koko tu coidgoo aqui el QR
+    
+
 
     while(1){
 
