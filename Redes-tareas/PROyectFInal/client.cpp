@@ -1,3 +1,4 @@
+#define _FILE_OFFSET_BITS 64
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -5,19 +6,26 @@
 #include <unistd.h>
 #include <cstring>
 #include <string>
-#include <thread>
 #include <cstdio>
-#include <cstdlib>
-#include <vector>
-#include<map>
+#include <thread>
+#include <arpa/inet.h>  
 #include <sys/types.h>
+#include <map>
+#include <vector>
+#include <fstream>
+#include <sstream>
+#include <filesystem>
 #include <mutex>
-#include <cstdint>
+#include <fcntl.h>   
 
+#include <sys/stat.h>   
 
+#include <sys/mman.h>   
 
 
 using namespace std;
+
+namespace fs = std::filesystem;
 constexpr int BUFFER_SIZE = 300;
 
 string int_String(int n,int tamano){
@@ -52,7 +60,7 @@ string int_String3(off_t n,int tamano){
   return num;
 }
 int numero_read(int sockt,int cont){
-    char nume[9];
+    char nume[100];
     int n=read (sockt,nume,cont);
     nume[n]='\0';
     return atoi(nume);
@@ -84,38 +92,7 @@ string read_textLong(int sockt,int t){
 }
 
 
-void recv_File(int sock,off_t tamano,const string &nombre_archivo) {
-    FILE* salida=fopen(nombre_archivo.c_str(),"wb");
-    if (!salida) {
-        
-        return;
-    }
 
-    const size_t sizeT = 1024 * 1024; 
-    char buffer[sizeT];
-
-    off_t restantes=tamano;
-
-    while(restantes>0){
-        size_t aLeer;
-
-        if (restantes>sizeT) {
-            aLeer=sizeT;
-        } else {
-            aLeer=restantes;
-        }
-        ssize_t n=read(sock,buffer,aLeer);
-        if (n<=0) {
-           
-            break;
-        }
-
-        fwrite(buffer,1,n,salida);
-        restantes-=n;
-    }
-
-    fclose(salida);
-}
 long numero_read2(int sockt,int cont){
     char nume[1000];
     int n=read (sockt,nume,cont);
@@ -188,7 +165,100 @@ void enviarFIle(int sock,string name,long x, long y){
         
     fclose(file);
 }
+void recv_File(int sock,off_t tamano,string nombre_archivo,string carpeta) {
+    bool exitearch=!fs::exists(carpeta);
 
+    if ( exitearch== false) {
+        fs::create_directories(carpeta);
+    }
+     nombre_archivo = carpeta + "/"+nombre_archivo;
+    FILE* salida=fopen(nombre_archivo.c_str(),"wb");
+    if (!salida) {
+        
+        return;
+    }
+
+    size_t sizeT = 1024 * 1024; 
+
+    char* buffer = new char[sizeT];  
+
+    off_t restantes=tamano;
+
+    while(restantes>0){
+        size_t aLeer;
+
+        if (restantes>sizeT) {
+            aLeer=sizeT;
+        } else {
+            aLeer=restantes;
+        }
+        ssize_t n=read(sock,buffer,aLeer);
+
+        if (n<=0) {
+           
+            break;
+        }
+
+        fwrite(buffer,1,n,salida);
+        restantes-=n;
+    }
+
+    fclose(salida);
+}
+string comletreicivirfile(int sock,long &filas, long &columnas, int worker,string carpAlcamacena){
+
+
+    char texto2[2];
+
+    int n=read(sock,texto2,1);
+    if (texto2[0]=='f'){
+
+    string nameF;
+
+    long x=numero_read2(sock,10);
+            filas=x;
+            long y=numero_read2(sock,10);
+             columnas=y;
+            int t4= numero_read(sock,10);
+
+            nameF= texto_read(sock,t4);
+            
+            off_t t2= numero_read3(sock,20);
+            
+            size_t pos=nameF.rfind(".bin");
+            string nuevoNombre;
+            nuevoNombre=nameF.substr(0,pos)+to_string(worker)+nameF.substr(pos);
+            
+            recv_File(sock,t2,nuevoNombre,carpAlcamacena);
+            
+            //transpuestas[sockt][i]=carpeta+"/"+nuevoNombre;
+            string namefinall=carpAlcamacena+"/"+nuevoNombre;
+            return namefinall;
+
+    }
+
+    return "";
+
+}
+void bin_a_csv(string namebin, string namec,long filas,long columnas){
+    ifstream bin(namebin, ios::binary);
+    ofstream csv(namec);
+
+    double num; 
+    for(long f=0;f<filas; f++){
+        for(long c=0; c<columnas; c++){
+
+            if(!bin.read((char*)&num,sizeof(double))) break;
+            csv << num;
+
+            if(c<columnas-1) csv << ",";
+        }
+        csv << "\n";
+    }
+
+    bin.close();
+    csv.close();
+}
 int main() {
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (sock_fd < 0) { perror("socket"); return 1; }
@@ -203,8 +273,16 @@ int main() {
     long y=1000;
 
     string nombreach= "matrix.csv";
-
+    string SVD="svd";
     enviarFIle(sock_fd,nombreach,x, y);
+    string E=comletreicivirfile( sock_fd,x, y, 1,SVD);
+    string V=comletreicivirfile(sock_fd,x, y, 2,SVD);
+    string U=comletreicivirfile(sock_fd,x, y,3,SVD);
+     bin_a_csv(E, SVD+"/Efin.csv",x,y);
+    bin_a_csv(V, SVD+"/Vfin.csv",x,y);
+    bin_a_csv(U, SVD+"/Ufin.csv",x,y);
+
+
 
     while(1){
 

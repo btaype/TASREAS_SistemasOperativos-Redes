@@ -27,7 +27,7 @@ using namespace std;
 namespace fs = std::filesystem;
 
 
-using namespace std;
+
 constexpr int BUFFER_SIZE = 300;
 
 string int_String(int n,int tamano){
@@ -419,6 +419,96 @@ void recive_sumas(int sock,int cantsum,string namecapta){
 
 
 }
+string comletreicivirfile(int sock,long &filas, long &columnas, int worker,string carpAlcamacena){
+
+
+    char texto2[2];
+
+    int n=read(sock,texto2,1);
+    if (texto2[0]=='f'){
+
+    string nameF;
+
+    long x=numero_read2(sock,10);
+            filas=x;
+            long y=numero_read2(sock,10);
+             columnas=y;
+            int t4= numero_read(sock,10);
+
+            nameF= texto_read(sock,t4);
+            
+            off_t t2= numero_read3(sock,20);
+            
+            size_t pos=nameF.rfind(".bin");
+            string nuevoNombre;
+            nuevoNombre=nameF.substr(0,pos)+to_string(worker)+nameF.substr(pos);
+            
+            recv_File(sock,t2,nuevoNombre,carpAlcamacena);
+            
+            //transpuestas[sockt][i]=carpeta+"/"+nuevoNombre;
+            string namefinall=carpAlcamacena+"/"+nuevoNombre;
+            return namefinall;
+
+    }
+
+    return "";
+
+}
+// Funcion para multiplicar matrices usando mmap (Version QR)
+void multiplicar_matrices_qr(string ruta_A, long filas_A, long cols_A, string ruta_B, long filas_B, long cols_B, string ruta_Salida) {
+    // Abrir y mapear la primera matriz (El pedazo cortado)
+    int desc_A = open(ruta_A.c_str(), O_RDONLY);
+    if (desc_A < 0) return;
+    
+    struct stat info_A;
+    fstat(desc_A, &info_A);
+    double* matriz_A = (double*)mmap(NULL, info_A.st_size, PROT_READ, MAP_PRIVATE, desc_A, 0);
+
+    // Abrir y mapear la segunda matriz (La matriz Q completa)
+    int desc_B = open(ruta_B.c_str(), O_RDONLY);
+    if (desc_B < 0) return;
+    
+    struct stat info_B;
+    fstat(desc_B, &info_B);
+    double* matriz_B = (double*)mmap(NULL, info_B.st_size, PROT_READ, MAP_PRIVATE, desc_B, 0);
+
+    // Preparar el archivo de salida lleno de ceros
+    FILE* archivo_out = fopen(ruta_Salida.c_str(), "wb");
+    long total_elementos = filas_A * cols_B;
+    
+    // Moverse al final y escribir un byte para reservar espacio
+    fseek(archivo_out, total_elementos * sizeof(double) - 1, SEEK_SET);
+    fputc(0, archivo_out);
+    fclose(archivo_out);
+
+    // Mapear el archivo de salida para escribir el resultado
+    int desc_C = open(ruta_Salida.c_str(), O_RDWR);
+    double* matriz_C = (double*)mmap(NULL, total_elementos * sizeof(double), PROT_READ | PROT_WRITE, MAP_SHARED, desc_C, 0);
+
+    // Hacer la multiplicacion fila por columna
+    for (long i = 0; i < filas_A; i++) {
+        for (long j = 0; j < cols_B; j++) {
+            double suma = 0;
+            for (long k = 0; k < cols_A; k++) {
+                // Aritmetica de punteros basica
+                double valor_a = matriz_A[i * cols_A + k];
+                double valor_b = matriz_B[k * cols_B + j];
+                suma = suma + (valor_a * valor_b);
+            }
+            matriz_C[i * cols_B + j] = suma;
+        }
+    }
+
+    // Limpiar memoria y cerrar archivos
+    munmap(matriz_A, info_A.st_size);
+    close(desc_A);
+    munmap(matriz_B, info_B.st_size);
+    close(desc_B);
+    munmap(matriz_C, total_elementos * sizeof(double));
+    close(desc_C);
+}
+
+
 
 void  readd(int sock,string name){
     char texto2[2];
@@ -492,7 +582,82 @@ void  readd(int sock,string name){
 
                 recive_sumas( sock,sumasnum,name);
            }
+           else if (texto2[0]=='U'){
+                long filas1;
+                long columna1;
+                string AI=comletreicivirfile(sock,filas1,columna1,sock,name);
+                cout<<filas1 << " "<< columna1<<"\n";
+                string E1=comletreicivirfile(sock,columna1,columna1,sock,name);
+                cout<<filas1 << " "<< columna1<<"\n";
+                string V=comletreicivirfile(sock,columna1,columna1,sock,name);
+                cout<<filas1 << " "<< columna1<<"\n";
+                //void multmatrixBin(string matrixA,long filasA,long columnasA,string matrixB,long filasB,long columnasB,string namemulti)
+                string name1ramult= name+"/"+"Av.bin";
+                
+                multmatrixBin(AI, filas1,columna1,V,columna1,columna1,name1ramult);
+                 string name2ramult= name+"/"+"AvE.bin";
 
+                 multmatrixBin(name1ramult, filas1,columna1,E1,columna1,columna1,name2ramult);
+                //transpuestaAbin(string nameBin,string nameBinT,long filas,long columnas)
+                string trasV=name+"/"+"traspV.bin";
+                transpuestaAbin( V,trasV,columna1,columna1);
+                enviarFIle(sock,name2ramult,"multAVE.bin",columna1,columna1);
+                enviarFIle(sock,trasV,"traspV.bin",columna1,columna1);
+           }
+           else if (texto2[0]=='u'){
+                long filas1;
+                long columna1;
+                string AI=comletreicivirfile(sock,filas1,columna1,sock,name);
+                cout<<filas1 << " "<< columna1<<"\n";
+                string E1=comletreicivirfile(sock,columna1,columna1,sock,name);
+                cout<<filas1 << " "<< columna1<<"\n";
+                string V=comletreicivirfile(sock,columna1,columna1,sock,name);
+                cout<<filas1 << " "<< columna1<<"\n";
+                string name1ramult= name+"/"+"Av.bin";
+                
+                multmatrixBin(AI, filas1,columna1,V,columna1,columna1,name1ramult);
+                 string name2ramult= name+"/"+"AvE.bin";
+
+                 multmatrixBin(name1ramult, filas1,columna1,E1,columna1,columna1,name2ramult);
+                 enviarFIle(sock,name2ramult,"multAVE.bin",columna1,columna1);
+           }
+            else if (texto2[0] == 'm') {
+                char buffer_temp[2];
+                // Leemos el siguiente caracter para confirmar protocolo (debe ser 'f')
+                int leidos = read(sock, buffer_temp, 1);
+                
+                if (buffer_temp[0] == 'f') {
+                    // 1. Recibir el primer archivo (El pedazo de matriz)
+                    long filas_A = numero_read2(sock, 10);
+                    long cols_A  = numero_read2(sock, 10);
+                    int largo_nombre = numero_read(sock, 10);
+                    string nombre_A = texto_read(sock, largo_nombre);
+                    off_t tamano_A = numero_read3(sock, 20);
+                    
+                    recv_File(sock, tamano_A, nombre_A, name); 
+                    string ruta_A = name + "/" + nombre_A;
+
+                    // 2. Recibir el segundo archivo (La matriz Q)
+                    read(sock, buffer_temp, 1); // Leer la 'f' del segundo archivo
+                    long filas_B = numero_read2(sock, 10);
+                    long cols_B  = numero_read2(sock, 10);
+                    int largo_nombre_B = numero_read(sock, 10);
+                    string nombre_B = texto_read(sock, largo_nombre_B);
+                    off_t tamano_B = numero_read3(sock, 20);
+
+                    recv_File(sock, tamano_B, nombre_B, name);
+                    string ruta_B = name + "/" + nombre_B;
+
+                    // 3. Realizar el calculo
+                    string nombre_resultado = "resultado_" + nombre_A;
+                    string ruta_resultado = name + "/" + nombre_resultado;
+                    
+                    multiplicar_matrices_qr(ruta_A, filas_A, cols_A, ruta_B, filas_B, cols_B, ruta_resultado);
+
+                    // 4. Devolver el archivo resultante al Master
+                    enviarFIle(sock, ruta_resultado, nombre_resultado, filas_A, cols_B);
+                }
+            }
 
 
     }
