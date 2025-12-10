@@ -304,6 +304,7 @@ void enviarFIle(int sock,string name,string name2,long x, long y){
     size_t read3;
 
     while (1) {
+       
         read3 = fread(buffer5,1,tamanoEnvio, file);
         if (read3<=0){
             break;
@@ -311,6 +312,7 @@ void enviarFIle(int sock,string name,string name2,long x, long y){
         size_t total_envio = 0;
 
         while (total_envio<read3) {
+            
             ssize_t sent = write(sock,buffer5+total_envio,read3-total_envio);
             if (sent<0) {
                 return;
@@ -1095,6 +1097,7 @@ void  readd(int sock){
             fs::copy_file(matriz_V_siguiente, matriz_V_actual, fs::copy_options::overwrite_existing);
 
             if (error_total < 0.00001) break;
+
         }
         
         cout << "=== FIN DEL PROCESO QR ===" << endl;
@@ -1134,19 +1137,27 @@ void  readd(int sock){
 
     string archivoU=carpeta+"/"+"U.bin";
     string VVV=carpeta+"/"+"traspV0.bin";
-    
+    #include <filesystem>
+    if (!std::filesystem::exists(VVV)) {
+        std::cerr << "Error: archivo " << VVV << " no existe\n";
+    }
+    if (!std::filesystem::exists(archivoU)) {
+        std::cerr << "Error: archivo " << archivoU << " no existe\n";
+    }
+    enviarFIle(sock,archivoU,"Ufin.bin",columnas,columnas);
     enviarFIle(sock,diagoanl,"Efinal.bin",columnas,columnas);
 
     enviarFIle(sock,VVV,"Vfinal.bin",columnas,columnas);
 
-    enviarFIle(sock,archivoU,"Ufin.bin",columnas,columnas);
+   
     
-    
-
-
-    while (1){
-
+    n=read(sock,texto2,1);
+    if (n<=0){
+        return;
     }
+
+
+    
 
     
     shutdown(sock, SHUT_RDWR);

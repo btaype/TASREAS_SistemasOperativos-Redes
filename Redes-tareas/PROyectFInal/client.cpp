@@ -28,6 +28,16 @@ using namespace std;
 namespace fs = std::filesystem;
 constexpr int BUFFER_SIZE = 300;
 
+off_t numero_read3(int sockt,int cont) {
+    char nume[1000];
+    int n=read(sockt,nume,cont);
+
+    if (n <= 0){ return 0;}
+
+    nume[n] = '\0';
+
+    return (off_t) strtoll(nume, NULL, 10);
+}
 string int_String(int n,int tamano){
 
   string num=to_string(n);
@@ -59,12 +69,6 @@ string int_String3(off_t n,int tamano){
   } 
   return num;
 }
-int numero_read(int sockt,int cont){
-    char nume[100];
-    int n=read (sockt,nume,cont);
-    nume[n]='\0';
-    return atoi(nume);
-}
 
 string read_textLong(int sockt,int t){
     char text[BUFFER_SIZE];
@@ -91,32 +95,28 @@ string read_textLong(int sockt,int t){
     return  total;
 }
 
-
-
-long numero_read2(int sockt,int cont){
-    char nume[1000];
+int numero_read(int sockt,int cont){
+    char nume[100];
     int n=read (sockt,nume,cont);
-    if (n <= 0){ return 0;}
     nume[n]='\0';
-    return atol(nume);
+    return atoi(nume);
 }
 
-off_t numero_read3(int sockt,int cont) {
-    char nume[1000];
-    int n=read(sockt,nume,cont);
 
-    if (n <= 0){ return 0;}
-
-    nume[n] = '\0';
-
-    return (off_t) strtoll(nume, NULL, 10);
-}
 
 string texto_read(int sockt, int cont){
     char text[256];
     int n=read (sockt,text,cont);
     text[n]='\0';
     return string(text);
+}
+
+
+long numero_read2(int sockt,int cont){
+    char nume[1000];
+    int n=read (sockt,nume,cont);
+    nume[n]='\0';
+    return atol(nume);
 }
 
 void enviarFIle(int sock,string name,long x, long y){
@@ -209,16 +209,16 @@ string comletreicivirfile(int sock,long &filas, long &columnas, int worker,strin
 
 
     char texto2[2];
-
+    
     int n=read(sock,texto2,1);
     if (texto2[0]=='f'){
-
+        cout<<"reeecifile\n";
     string nameF;
 
     long x=numero_read2(sock,10);
-            filas=x;
+            long filas=x;
             long y=numero_read2(sock,10);
-             columnas=y;
+            long columnas=y;
             int t4= numero_read(sock,10);
 
             nameF= texto_read(sock,t4);
@@ -231,9 +231,11 @@ string comletreicivirfile(int sock,long &filas, long &columnas, int worker,strin
             
             recv_File(sock,t2,nuevoNombre,carpAlcamacena);
             
-            //transpuestas[sockt][i]=carpeta+"/"+nuevoNombre;
+           
             string namefinall=carpAlcamacena+"/"+nuevoNombre;
             return namefinall;
+            
+            cout<<"reeecifile2\n";
 
     }
 
@@ -258,7 +260,48 @@ void bin_a_csv(string namebin, string namec,long filas,long columnas){
 
     bin.close();
     csv.close();
+
+
 }
+void readd(int sock){
+    string carpAlcamacena="svd";
+    char texto2[2];
+    while(1){
+    int n=read(sock,texto2,1);
+    if (texto2[0]=='f'){
+        cout<<"reeecifile\n";
+    string nameF;
+
+    long x=numero_read2(sock,10);
+            long filas=x;
+            long y=numero_read2(sock,10);
+            long columnas=y;
+            int t4= numero_read(sock,10);
+
+            nameF= texto_read(sock,t4);
+            
+            off_t t2= numero_read3(sock,20);
+            
+            size_t pos=nameF.rfind(".bin");
+            string nuevoNombre;
+            nuevoNombre=nameF.substr(0,pos)+to_string(2)+nameF.substr(pos);
+            
+            recv_File(sock,t2,nuevoNombre,carpAlcamacena);
+            
+            //transpuestas[sockt][i]=carpeta+"/"+nuevoNombre;
+            string namefinall=carpAlcamacena+"/"+nuevoNombre;
+             bin_a_csv(namefinall ,carpAlcamacena+ "/"+nuevoNombre+".csv",x,y);
+            
+            
+    }  
+
+
+
+
+
+}
+}
+
 int main() {
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (sock_fd < 0) { perror("socket"); return 1; }
@@ -271,22 +314,21 @@ int main() {
     }
     long x=1000;
     long y=1000;
-
+     long filas_temp = x;
+    long cols_temp = y;
+    
     string nombreach= "matrix.csv";
     string SVD="svd";
     enviarFIle(sock_fd,nombreach,x, y);
-    string E=comletreicivirfile( sock_fd,x, y, 1,SVD);
-    string V=comletreicivirfile(sock_fd,x, y, 2,SVD);
-    string U=comletreicivirfile(sock_fd,x, y,3,SVD);
-     bin_a_csv(E, SVD+"/Efin.csv",x,y);
-    bin_a_csv(V, SVD+"/Vfin.csv",x,y);
-    bin_a_csv(U, SVD+"/Ufin.csv",x,y);
-
-
-
+    thread t(readd, sock_fd);
+    t.detach();
     while(1){
 
+
     }
+
+
+   
 
 
 
